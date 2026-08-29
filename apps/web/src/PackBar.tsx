@@ -14,7 +14,7 @@ export function PackBar({ pack: handle }: { pack: PackHandle }) {
 
   if (!checked) {
     return (
-      <div className="packbar">
+      <div className="packbar" data-pack={pack.id}>
         <span>Sprawdzanie {pack.label}...</span>
       </div>
     );
@@ -22,7 +22,7 @@ export function PackBar({ pack: handle }: { pack: PackHandle }) {
 
   if (ready) {
     return (
-      <div className="packbar ready">
+      <div className="packbar ready" data-pack={pack.id}>
         <span>{pack.label} gotowy - dziala bez internetu</span>
       </div>
     );
@@ -34,7 +34,7 @@ export function PackBar({ pack: handle }: { pack: PackHandle }) {
         ? Math.min(100, Math.round((progress.receivedBytes / progress.totalBytes) * 100))
         : 0;
     return (
-      <div className="packbar">
+      <div className="packbar" data-pack={pack.id}>
         <span>
           Pobieranie {pack.label}: {percent}% ({formatMb(progress.receivedBytes)} /{' '}
           {formatMb(progress.totalBytes)})
@@ -46,7 +46,7 @@ export function PackBar({ pack: handle }: { pack: PackHandle }) {
 
   const total = pack.files.reduce((sum, file) => sum + file.bytes, 0);
   return (
-    <div className="packbar">
+    <div className="packbar" data-pack={pack.id}>
       <span>
         {pack.label} - {pack.description} ({formatMb(total)})
       </span>

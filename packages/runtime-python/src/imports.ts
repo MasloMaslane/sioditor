@@ -4,10 +4,7 @@
  * `import numpy` should simply work once the pack is present - making a contestant write
  * micropip incantations to use a library we already shipped would be a silly tax.
  */
-const PACK_BY_MODULE = new Map<string, string>([
-  ['numpy', 'numpy'],
-  ['np', 'numpy'],
-]);
+const PACK_BY_MODULE = new Map<string, string>([['numpy', 'numpy']]);
 
 const IMPORT_PATTERN = /^\s*(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
 

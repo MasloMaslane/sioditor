@@ -32,6 +32,22 @@ test.afterEach(async ({}, testInfo) => {
  * The offline path is the whole product promise, so it is tested the way a contestant
  * would hit it: install online, lose the network, keep working.
  */
+
+/** Downloads the named packs and waits for each to report ready. */
+async function downloadPacks(page: import('@playwright/test').Page, ids: string[]) {
+  for (const id of ids) {
+    const bar = page.locator(`[data-pack="${id}"]`);
+    // Selecting per pack rather than by index: clicking one bar re-renders it, which
+    // shifts every index-based locator taken beforehand.
+    await bar.getByRole('button', { name: 'Pobierz teraz' }).click();
+  }
+  for (const id of ids) {
+    await expect(page.locator(`[data-pack="${id}"]`)).toContainText(
+      'gotowy - dziala bez internetu',
+    );
+  }
+}
+
 test.describe('python runtime', () => {
   test('page is cross-origin isolated', async ({ page }) => {
     await page.goto('/');
@@ -42,8 +58,7 @@ test.describe('python runtime', () => {
 
   test('downloads the pack, then runs a program against stdin', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Pobierz teraz' }).click();
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+    await downloadPacks(page, ['python']);
 
     await page.getByRole('button', { name: 'Uruchom' }).click();
     // 1 + 2 + 3 + 4 from the default stdin.
@@ -53,8 +68,7 @@ test.describe('python runtime', () => {
 
   test('still runs with the network gone', async ({ page, context }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Pobierz teraz' }).click();
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+    await downloadPacks(page, ['python']);
 
     // Wait for the service worker to take control, otherwise the reload below has
     // nothing serving the app shell.
@@ -64,7 +78,7 @@ test.describe('python runtime', () => {
     await page.reload();
 
     // The pack probe re-runs on load. Wait for it, rather than racing it.
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+    await expect(page.locator('[data-pack="python"]')).toContainText('gotowy');
 
     await page.getByRole('button', { name: 'Uruchom' }).click();
     await expect(page.locator('.console pre')).toContainText('10');
@@ -72,14 +86,17 @@ test.describe('python runtime', () => {
 
   test('runs numpy from the cached pack while offline', async ({ page, context }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Pobierz teraz' }).click();
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
 
-    // The wheel rides along in the Python pack, so it is already cached by now.
+    // numpy is a separate optional pack, so both must be fetched. Downloading only the
+    // Python pack left the wheel to be pulled over the network, which passed online and
+    // failed the moment it mattered.
+    await downloadPacks(page, ['python', 'numpy']);
+
     await page.evaluate(() => navigator.serviceWorker.ready);
     await context.setOffline(true);
     await page.reload();
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+    await expect(page.locator('[data-pack="python"]')).toContainText('gotowy');
+    await expect(page.locator('[data-pack="numpy"]')).toContainText('gotowy');
 
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+a');
@@ -108,8 +125,7 @@ test.describe('python runtime', () => {
     // reported ready - and only the later decode failed, which made the app work online,
     // work locally off the HTTP cache, and fail offline in CI.
     await page.goto('/');
-    await page.getByRole('button', { name: 'Pobierz teraz' }).click();
-    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+    await downloadPacks(page, ['python', 'numpy']);
 
     const offenders = await page.evaluate(async () => {
       const found: string[] = [];

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Language } from '@sioditor/editor';
 import { PythonRuntime, type RunOutcome } from '@sioditor/runtime-python';
-import { PackManager, getPack, requestPersistence } from '@sioditor/storage';
+import { PACKS, PackManager, getPack, requestPersistence } from '@sioditor/storage';
 import { Editor } from './Editor.js';
 import { Console, type ConsoleLine } from './Console.js';
 import { PackBar } from './PackBar.js';
@@ -40,6 +40,10 @@ export function App() {
   const [status, setStatus] = useState<string>('');
 
   const pythonPack = usePack(packs, getPack('python'));
+  // Optional extras. Declared in PACKS but previously never rendered, which meant they
+  // could not be fetched and so could not work offline - the runtime silently fell back
+  // to pulling the wheel over the network.
+  const numpyPack = usePack(packs, getPack('numpy'));
   const runtime = useRef<PythonRuntime>(null);
   const abort = useRef<AbortController>(null);
 
@@ -141,6 +145,7 @@ export function App() {
       </header>
 
       <PackBar pack={pythonPack} />
+      <PackBar pack={numpyPack} />
 
       <main className="workspace">
         <Editor doc={source} language={language} onChange={setSource} onRun={() => void run()} />
