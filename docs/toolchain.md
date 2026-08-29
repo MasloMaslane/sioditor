@@ -108,12 +108,12 @@ resource headers (x86/ARM/GPU intrinsics).
 
 The build now runs. On an M-series Mac, LLVM 23.1.0:
 
-| artifact | raw | brotli-11 |
-|---|---:|---:|
-| `clang.wasm` | 58.6 MB | **11.6 MB** (5.05x) |
-| `lld.wasm` | 33.2 MB | **6.8 MB** (4.84x) |
-| `sysroot.bin` | 22.7 MB | 3.7 MB |
-| **first-visit total** | | **≈ 22 MB** |
+| artifact              |     raw |           brotli-11 |
+| --------------------- | ------: | ------------------: |
+| `clang.wasm`          | 58.6 MB | **11.6 MB** (5.05x) |
+| `lld.wasm`            | 33.2 MB |  **6.8 MB** (4.84x) |
+| `sysroot.bin`         | 22.7 MB |              3.7 MB |
+| **first-visit total** |         |         **≈ 22 MB** |
 
 That lands in the comfortable band. The pre-build estimate was 55-75 MB raw for a merged
 module; two separate binaries came in at 91.8 MB raw / 18.5 MB compressed, which is the
