@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { prepareCpp, setSource } from './helpers.js';
 
 /**
  * The C++ path end to end in a real browser: fetch a ninety-megabyte toolchain, compile
@@ -8,21 +9,8 @@ import { expect, test } from '@playwright/test';
 test.describe('c++ toolchain', () => {
   test.setTimeout(600_000);
 
-  const downloadCpp = async (page: import('@playwright/test').Page) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: 'C++' }).click();
-    await page.locator('[data-pack="cpp"]').getByRole('button', { name: 'Pobierz teraz' }).click();
-    await expect(page.locator('[data-pack="cpp"]')).toContainText('gotowy', { timeout: 300_000 });
-  };
-
-  const setSource = async (page: import('@playwright/test').Page, source: string) => {
-    await page.locator('.cm-content').click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.type(source);
-  };
-
   test('compiles and runs a program reading stdin', async ({ page }) => {
-    await downloadCpp(page);
+    await prepareCpp(page);
     await page.getByRole('button', { name: 'Uruchom' }).click();
 
     // The sample sums stdin, which defaults to "1 2 3 4". Asserted on the console pane
@@ -33,7 +21,7 @@ test.describe('c++ toolchain', () => {
   });
 
   test('reports compiler errors against the right line', async ({ page }) => {
-    await downloadCpp(page);
+    await prepareCpp(page);
     await setSource(page, 'int main() { undeclared_thing(); }');
     await page.getByRole('button', { name: 'Uruchom' }).click();
 
@@ -44,7 +32,7 @@ test.describe('c++ toolchain', () => {
   });
 
   test('warns that `long` is 32-bit here and 64-bit on the judge', async ({ page }) => {
-    await downloadCpp(page);
+    await prepareCpp(page);
     await setSource(page, '#include <iostream>\nint main() { long n = 1; std::cout << n; }');
     await page.getByRole('button', { name: 'Uruchom' }).click();
 
@@ -54,7 +42,7 @@ test.describe('c++ toolchain', () => {
   test('explains that exceptions are unavailable, instead of a raw link error', async ({
     page,
   }) => {
-    await downloadCpp(page);
+    await prepareCpp(page);
     await setSource(page, '#include <stdexcept>\nint main() { throw std::runtime_error("x"); }');
     await page.getByRole('button', { name: 'Uruchom' }).click();
 

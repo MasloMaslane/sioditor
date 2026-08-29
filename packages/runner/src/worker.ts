@@ -2,8 +2,7 @@
 import { WASI, File, OpenFile, ConsoleStdout, PreopenDirectory } from '@bjorn3/browser_wasi_shim';
 import type { ExecuteRequest, RunnerMessage, RunnerRequest } from './protocol.js';
 import type { RunOutcomeKind, RunResult } from './types.js';
-
-const PAGE_BYTES = 64 * 1024;
+import { classifyTrap } from './traps.js';
 
 const encoder = new TextEncoder();
 
@@ -37,21 +36,28 @@ async function execute(request: ExecuteRequest): Promise<RunResult> {
     { debug: false },
   );
 
-  // A ceiling rather than a budget: growth past `maximum` fails inside the module, which
-  // surfaces as a failed allocation or a trap - exactly what we want to report as
-  // out-of-memory instead of letting the tab balloon.
-  const maximumPages = Math.max(1, Math.floor(request.limits.memoryLimitBytes / PAGE_BYTES));
-  const memory = new WebAssembly.Memory({ initial: 256, maximum: maximumPages });
+  // The memory a wasi program uses is one it declares and exports itself; it does not
+  // import one. An earlier version of this file created a WebAssembly.Memory here and
+  // passed it as env.memory, which the module simply ignored - so every run reported the
+  // same 16 MB, and the cap was never enforced at all.
+  //
+  // The real cap is set at link time by --max-memory (see toolchain-cpp/flags.ts), which
+  // is baked into the module's memory declaration and enforced by the engine. This
+  // function's job is to measure, not to limit.
+  let instanceMemory: WebAssembly.Memory | undefined;
 
   const startedAt = performance.now();
-  let peakMemoryBytes = memory.buffer.byteLength;
-  const sampler = setInterval(() => {
-    peakMemoryBytes = Math.max(peakMemoryBytes, memory.buffer.byteLength);
-  }, 10);
+  let peakMemoryBytes = 0;
+  const sample = () => {
+    if (instanceMemory) {
+      peakMemoryBytes = Math.max(peakMemoryBytes, instanceMemory.buffer.byteLength);
+    }
+  };
+  const sampler = setInterval(sample, 10);
 
   const finish = (outcome: RunOutcomeKind, extra: Partial<RunResult> = {}): RunResult => {
     clearInterval(sampler);
-    peakMemoryBytes = Math.max(peakMemoryBytes, memory.buffer.byteLength);
+    sample();
     return {
       outcome,
       stdout: stdoutChunks.join(''),
@@ -66,8 +72,11 @@ async function execute(request: ExecuteRequest): Promise<RunResult> {
     const module = await WebAssembly.compile(request.moduleBytes);
     const instance = await WebAssembly.instantiate(module, {
       wasi_snapshot_preview1: wasi.wasiImport,
-      env: { memory },
     });
+
+    const exported = (instance.exports as { memory?: WebAssembly.Memory }).memory;
+    if (exported instanceof WebAssembly.Memory) instanceMemory = exported;
+
     wasi.start(
       instance as unknown as { exports: { memory: WebAssembly.Memory; _start: () => void } },
     );
@@ -83,12 +92,7 @@ async function execute(request: ExecuteRequest): Promise<RunResult> {
     }
 
     const message = cause instanceof Error ? cause.message : String(cause);
-    // Growth refused at `maximum` reads as an allocation failure rather than a distinct
-    // error type, so the message is the only signal available to tell the two apart.
-    if (/memory|allocation|grow/i.test(message)) {
-      return finish('out-of-memory', { detail: message });
-    }
-    return finish('crashed', { detail: message });
+    return finish(classifyTrap(message), { detail: message });
   }
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Language } from '@sioditor/editor';
 import { PythonRuntime, type RunOutcome } from '@sioditor/runtime-python';
-import { CppToolchain, explainBuildErrors } from '@sioditor/toolchain-cpp';
+import { CppToolchain, explainBuildErrors, RECURSION_LIMIT_NOTE } from '@sioditor/toolchain-cpp';
 import { execute, type RunResult } from '@sioditor/runner';
 import { PACKS, PackManager, getPack, requestPersistence } from '@sioditor/storage';
 import { Editor } from './Editor.js';
@@ -83,6 +83,8 @@ export function App() {
         return `przekroczono limit czasu (${result.durationMs} ms)`;
       case 'out-of-memory':
         return 'przekroczono limit pamieci';
+      case 'stack-overflow':
+        return 'przepelnienie stosu';
       case 'crashed':
         return result.exitCode === undefined
           ? `program przerwany: ${result.detail ?? 'nieznany blad'}`
@@ -142,6 +144,12 @@ export function App() {
       });
       if (result.stdout) setLines((prev) => [...prev, { stream: 'stdout', text: result.stdout }]);
       if (result.stderr) setLines((prev) => [...prev, { stream: 'stderr', text: result.stderr }]);
+      if (result.outcome === 'stack-overflow') {
+        // The browser's call stack is far shallower than a judge's, so a correct deep
+        // recursion still fails here. Saying so is the difference between a useful tool
+        // and one that makes a contestant doubt a working solution.
+        setLines((prev) => [...prev, { stream: 'stderr', text: `\n${RECURSION_LIMIT_NOTE}\n` }]);
+      }
       setStatus(`kompilacja ${build.compileMs + build.linkMs} ms, ${describeBuild(result)}`);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);

@@ -5,7 +5,11 @@ export interface RunResult {
   readonly stderr: string;
   /** Wall-clock milliseconds, measured around the wasm call. */
   readonly durationMs: number;
-  /** Peak linear memory in bytes. Sampled, so treat it as a close approximation. */
+  /**
+   * Peak linear memory in bytes, sampled from the module's own exported memory every
+   * 10 ms. A close approximation: a spike between samples is missed, and a program that
+   * finishes in under 10 ms reports only its final size.
+   */
   readonly peakMemoryBytes: number;
   /** Set when the program exited non-zero or trapped. */
   readonly exitCode?: number;
@@ -19,12 +23,26 @@ export interface RunResult {
  * and pretending otherwise would mislead.
  */
 export type RunOutcomeKind =
-  'finished' | 'crashed' | 'timed-out' | 'out-of-memory' | 'stopped' | 'internal-error';
+  | 'finished'
+  | 'crashed'
+  /**
+   * Recursion deeper than the engine's own call stack allows. Its own outcome rather than
+   * a kind of crash, because the browser's limit is thousands of frames where a judge
+   * allows millions - so it needs explaining, not just reporting.
+   */
+  | 'stack-overflow'
+  | 'timed-out'
+  | 'out-of-memory'
+  | 'stopped'
+  | 'internal-error';
 
 export interface RunLimits {
   /** Wall-clock cap. Exceeding it terminates the worker. */
   readonly timeLimitMs: number;
-  /** Hard ceiling on linear memory; the module cannot grow past it. */
+  /**
+   * Ceiling on linear memory. Applied at link time via --max-memory, not here: a wasi
+   * module declares and exports its own memory, so a runtime cannot impose one on it.
+   */
   readonly memoryLimitBytes: number;
 }
 
