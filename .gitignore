@@ -1,0 +1,17 @@
+node_modules/
+dist/
+dist-types/
+.vite/
+*.tsbuildinfo
+coverage/
+.DS_Store
+*.log
+
+# Toolchain artifacts are built in CI and deployed alongside the app.
+# They are never committed - see docs/toolchain.md.
+apps/web/public/toolchain/
+apps/web/public/pyodide/
+toolchain/build/
+toolchain/out/
+test-results/
+playwright-report/

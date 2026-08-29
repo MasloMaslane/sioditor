@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/storage" },
+    { "path": "./packages/editor" },
+    { "path": "./packages/runner" },
+    { "path": "./packages/toolchain-cpp" },
+    { "path": "./packages/runtime-python" },
+    { "path": "./apps/web" }
+  ]
+}

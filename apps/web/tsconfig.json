@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist-types",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/storage" },
+    { "path": "../../packages/editor" },
+    { "path": "../../packages/runner" },
+    { "path": "../../packages/toolchain-cpp" },
+    { "path": "../../packages/runtime-python" }
+  ]
+}

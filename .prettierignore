@@ -1,0 +1,5 @@
+dist/
+pnpm-lock.yaml
+apps/web/public/toolchain/
+apps/web/public/pyodide/
+packages/gnu-compat/include/
