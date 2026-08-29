@@ -10,7 +10,15 @@ function formatMb(bytes: number): string {
  * the network dies.
  */
 export function PackBar({ pack: handle }: { pack: PackHandle }) {
-  const { pack, ready, progress, download } = handle;
+  const { pack, ready, checked, progress, download } = handle;
+
+  if (!checked) {
+    return (
+      <div className="packbar">
+        <span>Sprawdzanie {pack.label}...</span>
+      </div>
+    );
+  }
 
   if (ready) {
     return (

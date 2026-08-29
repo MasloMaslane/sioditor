@@ -35,6 +35,9 @@ test.describe('python runtime', () => {
     await context.setOffline(true);
     await page.reload();
 
+    // The pack probe re-runs on load. Wait for it, rather than racing it.
+    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+
     await page.getByRole('button', { name: 'Uruchom' }).click();
     await expect(page.locator('.console pre')).toContainText('10');
   });
@@ -48,6 +51,7 @@ test.describe('python runtime', () => {
     await page.evaluate(() => navigator.serviceWorker.ready);
     await context.setOffline(true);
     await page.reload();
+    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
 
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+a');
@@ -55,5 +59,17 @@ test.describe('python runtime', () => {
 
     await page.getByRole('button', { name: 'Uruchom' }).click();
     await expect(page.locator('.console pre')).toContainText('6');
+  });
+
+  test('Run always produces feedback, never silence', async ({ page }) => {
+    // The regression this guards: the pack readiness probe had not resolved when Run was
+    // clicked, so the app took an early-return path that produced no output and no
+    // status - the user saw nothing at all. Asserting the transient disabled state would
+    // itself be a race, so this asserts the invariant instead: a click always says
+    // something. Run is additionally gated on the probe having landed.
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Uruchom' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Uruchom' }).click();
+    await expect(page.locator('.status')).not.toBeEmpty();
   });
 });

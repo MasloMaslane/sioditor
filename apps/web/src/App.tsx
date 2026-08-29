@@ -122,7 +122,11 @@ export function App() {
           ))}
         </div>
         <div className="actions">
-          <button className="primary" onClick={() => void run()} disabled={running}>
+          <button
+            className="primary"
+            onClick={() => void run()}
+            disabled={running || !pythonPack.checked}
+          >
             Uruchom
           </button>
           <button onClick={stop} disabled={!running}>
