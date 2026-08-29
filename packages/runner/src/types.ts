@@ -19,12 +19,7 @@ export interface RunResult {
  * and pretending otherwise would mislead.
  */
 export type RunOutcomeKind =
-  | 'finished'
-  | 'crashed'
-  | 'timed-out'
-  | 'out-of-memory'
-  | 'stopped'
-  | 'internal-error';
+  'finished' | 'crashed' | 'timed-out' | 'out-of-memory' | 'stopped' | 'internal-error';
 
 export interface RunLimits {
   /** Wall-clock cap. Exceeding it terminates the worker. */

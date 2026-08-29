@@ -138,7 +138,11 @@ export function App() {
         <aside className="side">
           <label className="panel">
             <span className="panel-title">Wejscie</span>
-            <textarea value={stdin} onChange={(event) => setStdin(event.target.value)} spellCheck={false} />
+            <textarea
+              value={stdin}
+              onChange={(event) => setStdin(event.target.value)}
+              spellCheck={false}
+            />
           </label>
           <Console lines={lines} status={status} />
         </aside>

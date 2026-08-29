@@ -96,7 +96,10 @@ async function main() {
 
   // Written so the pack manifest in @sioditor/storage can be checked against reality
   // rather than against a number somebody typed from memory.
-  await writeFile(join(target, 'vendored.json'), `${JSON.stringify({ version: PYODIDE_VERSION, files: manifest }, null, 2)}\n`);
+  await writeFile(
+    join(target, 'vendored.json'),
+    `${JSON.stringify({ version: PYODIDE_VERSION, files: manifest }, null, 2)}\n`,
+  );
 
   const total = manifest.reduce((sum, f) => sum + f.bytes, 0);
   console.log(`vendored pyodide ${PYODIDE_VERSION}: ${(total / 1024 / 1024).toFixed(1)} MB`);

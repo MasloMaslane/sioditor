@@ -1,0 +1,60 @@
+# Reference deployment for a self-hosted sioditor.
+#
+# Caddy over nginx here because it gets HTTPS right by itself and the header rules stay
+# readable. deploy/nginx.conf is the equivalent if you already run nginx.
+#
+# HTTPS is not optional: service workers, OPFS and SharedArrayBuffer all require a secure
+# context. localhost is exempt, which keeps local dev simple.
+
+sioditor.example.org {
+	root * /srv/sioditor
+	encode zstd gzip
+
+	# Cross-origin isolation. SharedArrayBuffer backs Pyodide's interrupt buffer and
+	# blocking stdin; without these headers both silently disappear. The app asserts
+	# crossOriginIsolated at runtime so a misconfigured proxy is loud, not subtle.
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	# Version-stamped assets never change under their URL. The long immutable max-age is
+	# also what lets Chrome keep its compiled-wasm code cache across visits - that cache
+	# is keyed on resource URL, so cache-busting defeats it.
+	@immutable path /toolchain/* /pyodide/* /assets/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	# The shell must be allowed to change, or an update never reaches anyone.
+	@shell path / /index.html /sw.js /manifest.webmanifest
+	header @shell Cache-Control "no-cache"
+
+	# Serve the .br files produced at build time. Compressing a 60 MB wasm per request is
+	# not viable; brotli-11 takes tens of seconds.
+	@brotli {
+		header_regexp Accept-Encoding br
+		file {path}.br
+	}
+	handle @brotli {
+		header Content-Encoding br
+		header Vary Accept-Encoding
+		rewrite * {path}.br
+		file_server
+	}
+
+	handle {
+		file_server
+	}
+
+	# SPA fallback, but never for assets: a 200 with HTML where a .wasm was expected
+	# produces a baffling error deep inside WebAssembly.instantiate.
+	@spa {
+		not path /toolchain/* /pyodide/* /assets/* /sw.js /manifest.webmanifest
+		file {
+			try_files {path} /index.html
+		}
+	}
+	rewrite @spa {http.matchers.file.relative}
+}

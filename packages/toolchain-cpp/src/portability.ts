@@ -79,7 +79,8 @@ const LONG_PHRASE_PATTERN = /\b(?:(?:un)?signed\s+)?long(?:\s+long)?(?:\s+(?:int
 const GCC_PRAGMA_PATTERN = /^\s*#\s*pragma\s+GCC\s+(?:optimize|target)\b/gm;
 
 /** x86 intrinsics simply do not exist on wasm32. */
-const X86_INTRINSICS_PATTERN = /^\s*#\s*include\s*<(?:immintrin|emmintrin|xmmintrin|x86intrin)\.h>/gm;
+const X86_INTRINSICS_PATTERN =
+  /^\s*#\s*include\s*<(?:immintrin|emmintrin|xmmintrin|x86intrin)\.h>/gm;
 
 function positionOf(source: string, offset: number): { line: number; column: number } {
   const before = source.slice(0, offset);

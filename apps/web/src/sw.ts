@@ -14,7 +14,8 @@ precacheAndRoute(self.__WB_MANIFEST);
 const PACK_PREFIXES = ['/pyodide/', '/toolchain/'];
 
 const isPackRequest = (url: URL): boolean =>
-  url.origin === self.location.origin && PACK_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
+  url.origin === self.location.origin &&
+  PACK_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 
 /**
  * Serve pack files from whichever pack cache holds them.

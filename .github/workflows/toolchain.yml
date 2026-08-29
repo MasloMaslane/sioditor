@@ -1,0 +1,84 @@
+name: toolchain
+
+# Expensive and rarely needed: run it by hand, or when the build inputs change.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'toolchain/**'
+      - '.github/workflows/toolchain.yml'
+
+jobs:
+  host-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          source toolchain/versions.env
+          git clone --depth 1 --branch "$LLVM_TAG" \
+            https://github.com/llvm/llvm-project.git toolchain/llvm-project
+          git -C toolchain/llvm-project apply ../patches/*.patch
+      - uses: hendrikmuhs/ccache-action@v1
+        with: { key: llvm-host }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - run: ./toolchain/build-host-tools.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-tools
+          path: toolchain/build/host/bin
+
+  cross-build:
+    needs: host-tools
+    runs-on: ubuntu-latest
+    # The job cap is 6 h and a cold MinSizeRel LLVM on 4 vCPU is estimated at 3.5-5 h.
+    # If this starts timing out, move to a larger runner rather than trimming the build.
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      # The runner has ~14 GB free, which is the binding constraint - not CPU.
+      - uses: jlumbroso/free-disk-space@main
+        with: { tool-cache: true }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build brotli
+
+      - run: |
+          source toolchain/versions.env
+          git clone --depth 1 --branch "$LLVM_TAG" \
+            https://github.com/llvm/llvm-project.git toolchain/llvm-project
+          git -C toolchain/llvm-project apply ../patches/*.patch
+
+      - name: Fetch wasi-sdk
+        run: |
+          source toolchain/versions.env
+          curl -sSL -o wasi-sdk.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION%%.*}/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux.tar.gz"
+          mkdir -p /opt/wasi-sdk && tar xzf wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-tools
+          path: toolchain/build/host/bin
+      - run: chmod +x toolchain/build/host/bin/*
+
+      - name: Cross-build clang + lld
+        env:
+          WASI_SDK: /opt/wasi-sdk
+        run: ./toolchain/build-wasm.sh
+
+      - name: Pack the sysroot
+        run: |
+          node toolchain/ci/pack-sysroot.mjs /opt/wasi-sdk/share/wasi-sysroot toolchain/out
+          cp toolchain/build/wasm/bin/llvm.wasm toolchain/out/
+
+      - name: Precompress
+        # Compression happens here, once, not per request: brotli-11 on a 60 MB wasm is
+        # not something a web server should ever be asked to do on the fly.
+        run: |
+          for f in toolchain/out/*.wasm toolchain/out/*.bin; do
+            brotli -q 11 -f -k "$f"
+          done
+          ls -l toolchain/out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-toolchain
+          path: toolchain/out

@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { PACKS } from '../src/packs.js';
 
 const vendored = JSON.parse(
-  readFileSync(join(import.meta.dirname, '../../../apps/web/public/pyodide/0.29.4/vendored.json'), 'utf8'),
+  readFileSync(
+    join(import.meta.dirname, '../../../apps/web/public/pyodide/0.29.4/vendored.json'),
+    'utf8',
+  ),
 ) as { version: string; files: Array<{ name: string; bytes: number }> };
 
 /**

@@ -68,7 +68,9 @@ async function execute(request: ExecuteRequest): Promise<RunResult> {
       wasi_snapshot_preview1: wasi.wasiImport,
       env: { memory },
     });
-    wasi.start(instance as unknown as { exports: { memory: WebAssembly.Memory; _start: () => void } });
+    wasi.start(
+      instance as unknown as { exports: { memory: WebAssembly.Memory; _start: () => void } },
+    );
     return finish('finished', { exitCode: 0 });
   } catch (cause) {
     // browser_wasi_shim throws a WASIProcExit carrying the status for a normal exit(),

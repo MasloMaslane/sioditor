@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Must run before typecheck and tests: the pack manifest test compares against the
+      # file sizes this produces, and the app cannot build without the Pyodide assets.
+      - run: pnpm vendor:pyodide
+
+      - run: pnpm typecheck
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Guard the precache manifest
+        # A large asset slipping into the precache would make first install download the
+        # whole toolchain eagerly and atomically - the exact failure this project is
+        # built to avoid.
+        run: node scripts/check-precache.mjs
+
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
