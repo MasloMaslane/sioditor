@@ -12,6 +12,8 @@ export interface PackHandle {
   readonly checked: boolean;
   readonly progress: PackProgress | undefined;
   readonly download: () => void;
+  /** Re-runs the availability probe, after the storage panel has changed things. */
+  readonly recheck: () => void;
 }
 
 /** Tracks one asset pack's availability and drives its download. */
@@ -20,7 +22,7 @@ export function usePack(manager: PackManager, pack: AssetPack): PackHandle {
   const [checked, setChecked] = useState(false);
   const [progress, setProgress] = useState<PackProgress>();
 
-  useEffect(() => {
+  const probe = useCallback(() => {
     let cancelled = false;
     void manager
       .isReady(pack)
@@ -35,6 +37,8 @@ export function usePack(manager: PackManager, pack: AssetPack): PackHandle {
     };
   }, [manager, pack]);
 
+  useEffect(probe, [probe]);
+
   const download = useCallback(() => {
     void manager
       .download(pack, setProgress)
@@ -42,5 +46,5 @@ export function usePack(manager: PackManager, pack: AssetPack): PackHandle {
       .catch(() => setReady(false));
   }, [manager, pack]);
 
-  return { pack, ready, checked, progress, download };
+  return { pack, ready, checked, progress, download, recheck: probe };
 }

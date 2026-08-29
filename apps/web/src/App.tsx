@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Language } from '@sioditor/editor';
 import { PACKS, PackManager, getPack, requestPersistence, testsOf } from '@sioditor/storage';
 import type { TestCase } from '@sioditor/storage';
@@ -7,6 +7,8 @@ import { ProblemList } from './ProblemList.js';
 import { TestPanel } from './TestPanel.js';
 import { PackBar } from './PackBar.js';
 import { usePack } from './usePack.js';
+import { StoragePanel } from './StoragePanel.js';
+import { useStorage } from './useStorage.js';
 import { useRun } from './useRun.js';
 import { STARTERS, useWorkspace } from './useWorkspace.js';
 
@@ -17,6 +19,8 @@ export function App() {
   const current = workspace.current;
   const language: Language = current?.language ?? 'python';
   const runner = useRun();
+  const storage = useStorage(packs);
+  const [storageOpen, setStorageOpen] = useState(false);
 
   const pythonPack = usePack(packs, getPack('python'));
   const numpyPack = usePack(packs, getPack('numpy'));
@@ -84,6 +88,9 @@ export function App() {
           <button onClick={runner.stop} disabled={!runner.running}>
             Zatrzymaj
           </button>
+          <button onClick={() => setStorageOpen(true)} title="Pamiec i pakiety">
+            Pakiety
+          </button>
         </div>
       </header>
 
@@ -119,6 +126,19 @@ export function App() {
           )}
         </aside>
       </main>
+
+      {storageOpen && (
+        <StoragePanel
+          storage={storage}
+          onClose={() => {
+            setStorageOpen(false);
+            // Packs may have been added or removed, so the run buttons need re-checking.
+            pythonPack.recheck();
+            cppPack.recheck();
+            numpyPack.recheck();
+          }}
+        />
+      )}
     </div>
   );
 }
