@@ -108,6 +108,9 @@ importers:
 
   packages/runtime-python:
     dependencies:
+      '@sioditor/runner':
+        specifier: workspace:*
+        version: link:../runner
       '@sioditor/storage':
         specifier: workspace:*
         version: link:../storage

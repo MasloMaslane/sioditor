@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import type { WorkerRequest, WorkerMessage, RunRequest } from './protocol.js';
 import { requiredPyodidePackages } from './imports.js';
+import { attachStdinChannel, readStdinBlocking } from '@sioditor/runner';
 
 // Pyodide's own types are only available once the module is loaded from our origin,
 // so the surface we use is described locally rather than pulled in as a build dep.
@@ -54,11 +55,20 @@ async function run(request: RunRequest): Promise<void> {
   pyodide.setStderr(emit('stderr'));
 
   // Pyodide asks for one line at a time and treats null as EOF. Splitting up front keeps
-  // input() behaving the way a program reading a test case expects.
+  // input() behaving the way a program reading a test case expects; once those run out we
+  // block on the shared channel if the page offered one, so input() can be answered live.
   const lines = stdin.length > 0 ? stdin.split('\n') : [];
   let cursor = 0;
+  const channel = request.stdinChannel ? attachStdinChannel(request.stdinChannel) : undefined;
+  const decoder = new TextDecoder();
+
   pyodide.setStdin({
-    stdin: () => (cursor < lines.length ? `${lines[cursor++]}\n` : null),
+    stdin: () => {
+      if (cursor < lines.length) return `${lines[cursor++]}\n`;
+      if (!channel) return null;
+      const bytes = readStdinBlocking(channel, () => post({ kind: 'needs-input', runId }));
+      return bytes.byteLength > 0 ? decoder.decode(bytes) : null;
+    },
   });
 
   const packages = requiredPyodidePackages(source);

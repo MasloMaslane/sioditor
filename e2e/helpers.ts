@@ -84,3 +84,8 @@ export async function requireCppToolchain(request: APIRequestContext): Promise<v
     'C++ toolchain artifacts are absent - build them with ./toolchain/build-local.sh',
   );
 }
+
+/** Turns on interactive input for the open problem. */
+export async function enableInteractive(page: Page): Promise<void> {
+  await page.locator('[data-field="interactive"]').check();
+}

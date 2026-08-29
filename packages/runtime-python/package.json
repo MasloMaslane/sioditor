@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "pyodide": "0.29.4",
+    "@sioditor/runner": "workspace:*",
     "@sioditor/storage": "workspace:*"
   }
 }

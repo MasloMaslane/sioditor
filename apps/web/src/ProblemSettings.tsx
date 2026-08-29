@@ -5,7 +5,9 @@ const MB = 1048576;
 /**
  * Per-problem run limits.
  *
- * Editable because OI tasks state their own, and the defaults here cannot know them. They
+ * Editable because OI tasks state their own, and the defaults here cannot know them.
+ * Interactive input sits here too: it changes how a run behaves, so it belongs with the
+ * other things that do. They
  * stop a runaway program and give a feel for whether a solution is in the right complexity
  * class - they are deliberately not a verdict, since these timings are a browser on the
  * contestant's laptop rather than the judge's hardware.
@@ -22,6 +24,7 @@ export function ProblemSettings({
       <label>
         <span>limit czasu</span>
         <input
+          data-field="time-limit"
           type="number"
           min={100}
           max={60000}
@@ -35,9 +38,20 @@ export function ProblemSettings({
         <span className="unit">ms</span>
       </label>
 
+      <label className="toggle">
+        <input
+          data-field="interactive"
+          type="checkbox"
+          checked={problem.interactive ?? false}
+          onChange={(event) => onChange({ interactive: event.target.checked })}
+        />
+        <span>wejscie interaktywne</span>
+      </label>
+
       <label>
         <span>limit pamieci</span>
         <input
+          data-field="memory-limit"
           type="number"
           min={16}
           max={2048}

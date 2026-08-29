@@ -22,6 +22,16 @@ export interface Problem {
   readonly stdin?: string;
   readonly timeLimitMs: number;
   readonly memoryLimitBytes: number;
+  /**
+   * Whether a program may block asking for input the test case did not provide.
+   *
+   * Off by default, and that default matters: the commonest shape in this setting reads
+   * until end of input (`while (cin >> x)`, `sys.stdin.read()`). With interactive input
+   * always on, those never finish - they block for a line nobody is going to type, and
+   * hit the time limit. It is worth having for poking at a solution by hand, which is why
+   * it is a switch rather than absent.
+   */
+  readonly interactive?: boolean;
   readonly updatedAt: number;
 }
 

@@ -1,10 +1,57 @@
 /// <reference lib="webworker" />
-import { WASI, File, OpenFile, ConsoleStdout, PreopenDirectory } from '@bjorn3/browser_wasi_shim';
+import {
+  WASI,
+  File,
+  OpenFile,
+  ConsoleStdout,
+  PreopenDirectory,
+  Fd,
+} from '@bjorn3/browser_wasi_shim';
+import { attachStdinChannel, readStdinBlocking } from './stdin-channel.js';
 import type { ExecuteRequest, RunnerMessage, RunnerRequest } from './protocol.js';
 import type { RunOutcomeKind, RunResult } from './types.js';
 import { classifyTrap } from './traps.js';
 
 const encoder = new TextEncoder();
+
+/**
+ * stdin that serves the test case first and then asks the page for more.
+ *
+ * browser_wasi_shim's OpenFile reads from a fixed buffer and reports end-of-input once it
+ * is spent, which is right for a test case but leaves an interactive program seeing EOF
+ * the moment it asks a question. This descriptor blocks on the shared channel instead,
+ * which is possible only because the worker is free to stop and the page is not.
+ */
+class InteractiveStdin extends Fd {
+  private offset = 0;
+
+  constructor(
+    private preloaded: Uint8Array,
+    private readonly channel: SharedArrayBuffer | undefined,
+    private readonly onWait: () => void,
+  ) {
+    super();
+  }
+
+  override fd_read(size: number): { ret: number; data: Uint8Array } {
+    if (this.offset >= this.preloaded.byteLength && this.channel) {
+      const more = readStdinBlocking(attachStdinChannel(this.channel), this.onWait);
+      if (more.byteLength > 0) {
+        // Keep whatever is unread rather than replacing, so a partial read is not lost.
+        const remaining = this.preloaded.subarray(this.offset);
+        const merged = new Uint8Array(remaining.byteLength + more.byteLength);
+        merged.set(remaining);
+        merged.set(more, remaining.byteLength);
+        this.preloaded = merged;
+        this.offset = 0;
+      }
+    }
+
+    const chunk = this.preloaded.subarray(this.offset, this.offset + size);
+    this.offset += chunk.byteLength;
+    return { ret: 0, data: chunk };
+  }
+}
 
 function collect(into: string[]): ConsoleStdout {
   return new ConsoleStdout((bytes) => {
@@ -28,7 +75,9 @@ async function execute(request: ExecuteRequest): Promise<RunResult> {
     [...request.argv],
     [],
     [
-      new OpenFile(new File(stdinBytes)),
+      new InteractiveStdin(stdinBytes, request.stdinChannel, () =>
+        self.postMessage({ kind: 'needs-input' } satisfies RunnerMessage),
+      ),
       collect(stdoutChunks),
       collect(stderrChunks),
       new PreopenDirectory('/', new Map()),

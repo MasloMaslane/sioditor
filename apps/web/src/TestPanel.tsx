@@ -23,6 +23,10 @@ interface TestPanelProps {
   cases: readonly TestCase[];
   results: ReadonlyMap<string, CaseResult>;
   onChange: (cases: readonly TestCase[]) => void;
+  /** The case whose program is blocked waiting for a line, if any. */
+  awaitingInput?: string | undefined;
+  onSendInput?: (text: string) => void;
+  onEndInput?: () => void;
 }
 
 const newCase = (input = '', expected = ''): TestCase => ({
@@ -37,7 +41,14 @@ const newCase = (input = '', expected = ''): TestCase => ({
  * Built around pasting, because that is how sample tests arrive - straight out of a task
  * statement - and typing them back in by hand is the tedium this is meant to remove.
  */
-export function TestPanel({ cases, results, onChange }: TestPanelProps) {
+export function TestPanel({
+  cases,
+  results,
+  onChange,
+  awaitingInput,
+  onSendInput,
+  onEndInput,
+}: TestPanelProps) {
   const [pasting, setPasting] = useState(false);
   const [pasted, setPasted] = useState('');
 
@@ -149,6 +160,29 @@ export function TestPanel({ cases, results, onChange }: TestPanelProps) {
                   </label>
                 )}
               </div>
+
+              {awaitingInput === testCase.id && (
+                <form
+                  className="await-input"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const field = event.currentTarget.elements.namedItem('line');
+                    if (field instanceof HTMLInputElement) {
+                      onSendInput?.(field.value);
+                      field.value = '';
+                    }
+                  }}
+                >
+                  <span>program czeka na wejscie</span>
+                  <input name="line" autoFocus autoComplete="off" placeholder="wpisz linie" />
+                  <button type="submit" className="primary">
+                    Wyslij
+                  </button>
+                  <button type="button" onClick={() => onEndInput?.()} title="Koniec wejscia">
+                    EOF
+                  </button>
+                </form>
+              )}
 
               {result?.comparison.verdict === 'match' && !result.comparison.exact && (
                 <p className="case-hint">

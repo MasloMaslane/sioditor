@@ -8,6 +8,11 @@ export interface RunRequest {
   readonly stdin: string;
   /** Wall-clock cap in milliseconds. The client, not the worker, enforces it. */
   readonly timeLimitMs: number;
+  /**
+   * Shared buffer for interactive input, when the page is offering it. Absent means
+   * input() sees end-of-input once `stdin` is spent.
+   */
+  readonly stdinChannel?: SharedArrayBuffer;
 }
 
 export interface InitRequest {
@@ -32,6 +37,12 @@ export interface OutputMessage {
   readonly text: string;
 }
 
+/** The program is blocked on input() and the page should prompt. */
+export interface NeedsInputMessage {
+  readonly kind: 'needs-input';
+  readonly runId: string;
+}
+
 export interface DoneMessage {
   readonly kind: 'done';
   readonly runId: string;
@@ -45,4 +56,5 @@ export interface FailedMessage {
   readonly error: string;
 }
 
-export type WorkerMessage = ReadyMessage | OutputMessage | DoneMessage | FailedMessage;
+export type WorkerMessage =
+  ReadyMessage | OutputMessage | NeedsInputMessage | DoneMessage | FailedMessage;

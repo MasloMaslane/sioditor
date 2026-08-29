@@ -11,6 +11,16 @@ export interface ExecuteRequest {
   readonly stdin: string;
   readonly argv: readonly string[];
   readonly limits: RunLimits;
+  /**
+   * Shared buffer for interactive input, when the page is offering it. Absent means the
+   * program sees end-of-input once `stdin` is exhausted, which is what a test case wants.
+   */
+  readonly stdinChannel?: SharedArrayBuffer;
+}
+
+/** The program is blocked reading stdin and the page should prompt for a line. */
+export interface NeedsInputMessage {
+  readonly kind: 'needs-input';
 }
 
 export interface ResultMessage {
@@ -19,4 +29,4 @@ export interface ResultMessage {
 }
 
 export type RunnerRequest = ExecuteRequest;
-export type RunnerMessage = ResultMessage;
+export type RunnerMessage = ResultMessage | NeedsInputMessage;

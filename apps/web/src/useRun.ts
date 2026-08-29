@@ -1,7 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
 import { CppToolchain, explainBuildErrors, RECURSION_LIMIT_NOTE } from '@sioditor/toolchain-cpp';
 import { PythonRuntime } from '@sioditor/runtime-python';
-import { execute } from '@sioditor/runner';
+import {
+  closeStdin,
+  createStdinChannel,
+  execute,
+  provideStdin,
+  type StdinChannel,
+} from '@sioditor/runner';
 import {
   compareOutput,
   getPack,
@@ -24,6 +30,12 @@ export interface CaseResult {
 
 export interface RunState {
   readonly running: boolean;
+  /** The case currently blocked on input, if any. */
+  readonly awaitingInput: string | undefined;
+  /** Answers a blocked program. A newline is appended, as pressing enter would. */
+  readonly sendInput: (text: string) => void;
+  /** Tells a blocked program that nothing more is coming. */
+  readonly endInput: () => void;
   readonly status: string;
   readonly results: ReadonlyMap<string, CaseResult>;
   readonly buildOutput: string;
@@ -46,6 +58,8 @@ export function useRun(): RunState {
   const [results, setResults] = useState<ReadonlyMap<string, CaseResult>>(new Map());
   const [buildOutput, setBuildOutput] = useState('');
 
+  const [awaitingInput, setAwaitingInput] = useState<string>();
+  const channel = useRef<StdinChannel>(null);
   const python = useRef<PythonRuntime>(null);
   const toolchain = useRef<CppToolchain>(null);
   const pchLoaded = useRef<boolean>(false);
@@ -55,6 +69,24 @@ export function useRun(): RunState {
     setResults(new Map());
     setBuildOutput('');
     setStatus('');
+    setAwaitingInput(undefined);
+  }, []);
+
+  /**
+   * Interactive input needs a SharedArrayBuffer, which exists only on a cross-origin
+   * isolated page. The server sets the headers, but a misconfigured proxy would drop
+   * them - in which case running still works and only live input is unavailable.
+   */
+  const isolated = typeof SharedArrayBuffer === 'function' && self.crossOriginIsolated;
+
+  const sendInput = useCallback((text: string) => {
+    if (channel.current) provideStdin(channel.current, `${text}\n`);
+    setAwaitingInput(undefined);
+  }, []);
+
+  const endInput = useCallback(() => {
+    if (channel.current) closeStdin(channel.current);
+    setAwaitingInput(undefined);
   }, []);
 
   const record = useCallback((result: CaseResult) => {
@@ -94,12 +126,20 @@ export function useRun(): RunState {
       for (const testCase of cases) {
         if (signal.aborted) break;
         setStatus(`uruchamianie ${cases.indexOf(testCase) + 1}/${cases.length}...`);
+        channel.current = isolated && problem.interactive ? createStdinChannel() : null;
         const result = await execute({
           moduleBytes: build.moduleBytes,
           stdin: testCase.input,
           limits: { timeLimitMs: problem.timeLimitMs, memoryLimitBytes: problem.memoryLimitBytes },
           signal,
+          ...(channel.current
+            ? {
+                stdinChannel: channel.current.header.buffer as SharedArrayBuffer,
+                onNeedsInput: () => setAwaitingInput(testCase.id),
+              }
+            : {}),
         });
+        setAwaitingInput(undefined);
         record({
           caseId: testCase.id,
           stdout: result.stdout,
@@ -115,7 +155,7 @@ export function useRun(): RunState {
       }
       setStatus(`kompilacja ${build.compileMs + build.linkMs} ms`);
     },
-    [record],
+    [isolated, record],
   );
 
   const runPython = useCallback(
@@ -128,16 +168,24 @@ export function useRun(): RunState {
 
         let stdout = '';
         let stderr = '';
+        channel.current = isolated && problem.interactive ? createStdinChannel() : null;
         const outcome = await python.current.run({
           source: problem.source,
           stdin: testCase.input,
           timeLimitMs: problem.timeLimitMs,
+          ...(channel.current
+            ? {
+                stdinChannel: channel.current.header.buffer as SharedArrayBuffer,
+                onNeedsInput: () => setAwaitingInput(testCase.id),
+              }
+            : {}),
           onOutput: ({ stream, text }) => {
             if (stream === 'stdout') stdout += text;
             else stderr += text;
           },
           signal,
         });
+        setAwaitingInput(undefined);
         if (outcome.kind === 'error') stderr += outcome.message;
 
         record({
@@ -151,7 +199,7 @@ export function useRun(): RunState {
       }
       setStatus('');
     },
-    [record],
+    [isolated, record],
   );
 
   const run = useCallback(
@@ -182,7 +230,24 @@ export function useRun(): RunState {
     [clear, runCpp, runPython],
   );
 
-  const stop = useCallback(() => abort.current?.abort(), []);
+  const stop = useCallback(() => {
+    // Release a blocked read first: a program parked in Atomics.wait would otherwise sit
+    // there until the time limit, and the page would keep showing a prompt.
+    if (channel.current) closeStdin(channel.current);
+    setAwaitingInput(undefined);
+    abort.current?.abort();
+  }, []);
 
-  return { running, status, results, buildOutput, run, stop, clear };
+  return {
+    running,
+    status,
+    results,
+    buildOutput,
+    awaitingInput,
+    sendInput,
+    endInput,
+    run,
+    stop,
+    clear,
+  };
 }

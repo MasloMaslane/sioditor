@@ -12,6 +12,10 @@ export type RunOutcome =
   | { readonly kind: 'stopped'; readonly durationMs: number };
 
 export interface RunOptions {
+  /** Shared buffer for interactive input; absent means EOF once `stdin` is spent. */
+  readonly stdinChannel?: SharedArrayBuffer;
+  /** Called when the program blocks on input() with nothing left to give it. */
+  readonly onNeedsInput?: () => void;
   readonly source: string;
   readonly stdin?: string;
   readonly timeLimitMs?: number;
@@ -106,6 +110,8 @@ export class PythonRuntime {
         const message = event.data;
         if (message.kind === 'output' && message.runId === runId) {
           options.onOutput?.({ stream: message.stream, text: message.text });
+        } else if (message.kind === 'needs-input' && message.runId === runId) {
+          options.onNeedsInput?.();
         } else if (message.kind === 'done' && message.runId === runId) {
           finish(this.outcomeFor(message, elapsed()));
         } else if (message.kind === 'failed') {
@@ -131,6 +137,7 @@ export class PythonRuntime {
         source: options.source,
         stdin: options.stdin ?? '',
         timeLimitMs,
+        ...(options.stdinChannel ? { stdinChannel: options.stdinChannel } : {}),
       };
       worker.postMessage(request);
     });

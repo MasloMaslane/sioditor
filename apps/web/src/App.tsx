@@ -119,6 +119,9 @@ export function App() {
             cases={cases}
             results={runner.results}
             onChange={(next: readonly TestCase[]) => workspace.update({ tests: next })}
+            awaitingInput={runner.awaitingInput}
+            onSendInput={runner.sendInput}
+            onEndInput={runner.endInput}
           />
           {(runner.buildOutput || runner.status) && (
             <div className="panel build">

@@ -2,6 +2,13 @@ import type { RunnerMessage, RunnerRequest } from './protocol.js';
 import { DEFAULT_LIMITS, type RunLimits, type RunResult } from './types.js';
 
 export interface ExecuteOptions {
+  /**
+   * Shared buffer for interactive input. When absent the program sees end-of-input once
+   * `stdin` is spent, which is what running a test case wants.
+   */
+  readonly stdinChannel?: SharedArrayBuffer;
+  /** Called when the program blocks waiting for a line the page has not supplied yet. */
+  readonly onNeedsInput?: () => void;
   readonly moduleBytes: Uint8Array<ArrayBuffer>;
   readonly stdin?: string;
   readonly argv?: readonly string[];
@@ -37,6 +44,13 @@ export async function execute(options: ExecuteOptions): Promise<RunResult> {
       const onAbort = () => resolve(empty('stopped'));
 
       worker.onmessage = (event: MessageEvent<RunnerMessage>) => {
+        if (event.data.kind === 'needs-input') {
+          // Not a result: the program is blocked and the page has to prompt. The time
+          // limit keeps running, which is right - a program waiting on input it will
+          // never get should still be stopped.
+          options.onNeedsInput?.();
+          return;
+        }
         clearTimeout(timer);
         resolve(event.data.result);
       };
@@ -52,6 +66,7 @@ export async function execute(options: ExecuteOptions): Promise<RunResult> {
         stdin: options.stdin ?? '',
         argv: options.argv ?? ['program'],
         limits,
+        ...(options.stdinChannel ? { stdinChannel: options.stdinChannel } : {}),
       };
       worker.postMessage(request);
     });

@@ -649,3 +649,45 @@ button.wide {
   padding: 4px 6px;
   font-size: 12px;
 }
+
+.await-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.await-input span {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.await-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.await-input button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.limits .toggle {
+  gap: 4px;
+  cursor: pointer;
+}
+
+.limits .toggle input {
+  width: auto;
+  margin: 0;
+}

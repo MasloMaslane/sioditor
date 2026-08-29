@@ -85,8 +85,10 @@ test.describe('workspace', () => {
 
   test('limits are editable and survive a reload', async ({ page }) => {
     await page.goto('/');
-    const time = page.locator('.limits input').first();
-    const memory = page.locator('.limits input').nth(1);
+    // Addressed by name rather than position: a field added to this row previously
+    // shifted every index and broke this test.
+    const time = page.locator('[data-field="time-limit"]');
+    const memory = page.locator('[data-field="memory-limit"]');
     await expect(time).toHaveValue('5000');
     await expect(memory).toHaveValue('256');
 
@@ -95,7 +97,7 @@ test.describe('workspace', () => {
     await page.waitForTimeout(1500);
 
     await page.reload();
-    await expect(page.locator('.limits input').first()).toHaveValue('1500');
-    await expect(page.locator('.limits input').nth(1)).toHaveValue('64');
+    await expect(page.locator('[data-field="time-limit"]')).toHaveValue('1500');
+    await expect(page.locator('[data-field="memory-limit"]')).toHaveValue('64');
   });
 });
