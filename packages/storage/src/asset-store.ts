@@ -7,6 +7,25 @@ import type { AssetPack, PackProgress } from './packs.js';
  * pays no structured-clone tax on binary data, and writes large blobs an order of
  * magnitude faster. The Cache API stays where it belongs: the service worker's app shell.
  */
+
+/**
+ * Rejects a response that is the app shell rather than the asset.
+ *
+ * A misconfigured server - or a dev server's SPA fallback - answers a missing asset with
+ * 200 and index.html. Storing that produces a cache entry that looks fine and then fails
+ * deep inside WebAssembly.compile or the Python loader, with nothing pointing at the
+ * cause.
+ */
+function assertNotAppShell(url: string, response: Response): void {
+  const type = response.headers.get('content-type') ?? '';
+  if (type.includes('text/html')) {
+    throw new Error(
+      `${url} returned an HTML page rather than the asset - the server is falling back ` +
+        'to index.html, or the file was never deployed',
+    );
+  }
+}
+
 export class AssetStore {
   private rootPromise: Promise<FileSystemDirectoryHandle> | undefined;
 
@@ -82,6 +101,7 @@ export class AssetStore {
         if (!response.ok) {
           throw new Error(`${url} returned ${response.status} ${response.statusText}`);
         }
+        assertNotAppShell(url, response);
 
         // Trust the server's own number over our estimate when it gives one. With
         // build-time brotli the header reflects the decoded length, which is what we want.

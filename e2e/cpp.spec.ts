@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { prepareCpp, runAll, setSource, testCase } from './helpers.js';
+import { prepareCpp, runAll, setSource, testCase, requireCppToolchain } from './helpers.js';
 
 /**
  * The C++ path end to end in a real browser: fetch a ninety-megabyte toolchain, compile
@@ -8,6 +8,8 @@ import { prepareCpp, runAll, setSource, testCase } from './helpers.js';
  */
 test.describe('c++ toolchain', () => {
   test.setTimeout(600_000);
+
+  test.beforeEach(async ({ request }) => requireCppToolchain(request));
 
   test('compiles and runs a program reading stdin', async ({ page }) => {
     await prepareCpp(page);

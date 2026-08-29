@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { prepareCpp, runAll, setSource, testCase } from './helpers.js';
+import { prepareCpp, runAll, setSource, testCase, requireCppToolchain } from './helpers.js';
 
 /**
  * Runtime measurement and limits, against real compiled programs.
@@ -10,6 +10,8 @@ import { prepareCpp, runAll, setSource, testCase } from './helpers.js';
  */
 test.describe('run limits and measurement', () => {
   test.setTimeout(600_000);
+
+  test.beforeEach(async ({ request }) => requireCppToolchain(request));
 
   const prepare = async (page: import('@playwright/test').Page, source: string) => {
     await prepareCpp(page);

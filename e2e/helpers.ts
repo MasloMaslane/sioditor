@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
  * Replaces the editor contents.
@@ -64,3 +64,23 @@ export async function setFirstCase(page: Page, input: string, expected = ''): Pr
 
 export const runAll = (page: Page) =>
   page.getByRole('button', { name: 'Uruchom wszystkie' }).click();
+
+/**
+ * Skips the calling suite when the C++ toolchain has not been built.
+ *
+ * The artifacts are ~115 MB and are produced by toolchain/build-local.sh or the toolchain
+ * workflow; they are deliberately not in the repository. Without this guard CI spent five
+ * minutes per test waiting for a download that could never finish, and reported a bare
+ * timeout rather than the actual reason.
+ */
+export async function requireCppToolchain(request: APIRequestContext): Promise<void> {
+  // A 200 is not enough: the preview server falls back to index.html for unknown paths,
+  // so a missing artifact answers 200 with text/html. The content type is what actually
+  // distinguishes "here is the compiler" from "here is the app shell".
+  const response = await request.head('/toolchain/cpp/dev/clang.wasm').catch(() => null);
+  const type = response?.headers()['content-type'] ?? '';
+  test.skip(
+    !response?.ok() || !type.includes('application/wasm'),
+    'C++ toolchain artifacts are absent - build them with ./toolchain/build-local.sh',
+  );
+}

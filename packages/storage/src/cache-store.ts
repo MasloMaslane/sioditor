@@ -12,6 +12,25 @@ function cacheName(pack: AssetPack): string {
  * the case that forces it. The service worker answers those requests from here, so the
  * runtime never learns it is offline.
  */
+
+/**
+ * Rejects a response that is the app shell rather than the asset.
+ *
+ * A misconfigured server - or a dev server's SPA fallback - answers a missing asset with
+ * 200 and index.html. Storing that produces a cache entry that looks fine and then fails
+ * deep inside WebAssembly.compile or the Python loader, with nothing pointing at the
+ * cause.
+ */
+function assertNotAppShell(url: string, response: Response): void {
+  const type = response.headers.get('content-type') ?? '';
+  if (type.includes('text/html')) {
+    throw new Error(
+      `${url} returned an HTML page rather than the asset - the server is falling back ` +
+        'to index.html, or the file was never deployed',
+    );
+  }
+}
+
 export class CacheAssetStore {
   async isReady(pack: AssetPack): Promise<boolean> {
     if (!(await caches.has(cacheName(pack)))) return false;
@@ -63,6 +82,7 @@ export class CacheAssetStore {
         if (!response.ok) {
           throw new Error(`${url} returned ${response.status} ${response.statusText}`);
         }
+        assertNotAppShell(url, response);
 
         const declared = Number(response.headers.get('content-length'));
         if (Number.isFinite(declared) && declared > 0) {
