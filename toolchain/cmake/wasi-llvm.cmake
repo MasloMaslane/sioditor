@@ -20,8 +20,21 @@ set(CMAKE_EXECUTABLE_SUFFIX .wasm)
 set(UNIX 1)
 set(CMAKE_CROSSCOMPILING TRUE)
 
+# CMake re-includes this file inside the try_compile sub-project it uses to probe the
+# compiler, and cache variables passed with -D do not propagate into that nested scope.
+# Without the two lines below, WASI_SDK is set for the real build and empty inside the
+# probe, which fails with a confusing "CMAKE_C_COMPILER not set, after EnableLanguage".
+if(NOT DEFINED WASI_SDK AND DEFINED ENV{WASI_SDK})
+  set(WASI_SDK "$ENV{WASI_SDK}")
+endif()
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES WASI_SDK)
+
 if(NOT DEFINED WASI_SDK)
   message(FATAL_ERROR "WASI_SDK must point at an extracted wasi-sdk installation")
+endif()
+
+if(NOT EXISTS "${WASI_SDK}/bin/clang")
+  message(FATAL_ERROR "no clang at ${WASI_SDK}/bin/clang - is WASI_SDK correct?")
 endif()
 
 set(_triple wasm32-wasip1)

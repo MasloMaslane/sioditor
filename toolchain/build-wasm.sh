@@ -12,6 +12,7 @@ src="${LLVM_SRC:-$here/llvm-project}"
 build="${WASM_BUILD:-$here/build/wasm}"
 host_bin="${HOST_BUILD:-$here/build/host}/bin"
 : "${WASI_SDK:?set WASI_SDK to an extracted wasi-sdk installation}"
+export WASI_SDK
 
 # wasi-libc gates several POSIX facilities behind these macros and supplies emulation
 # libraries for them. Without the -D the headers do not declare the symbols at all.

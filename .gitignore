@@ -15,3 +15,7 @@ toolchain/build/
 toolchain/out/
 test-results/
 playwright-report/
+# Fetched by toolchain/fetch-llvm.sh and fetch-wasi-sdk.sh into the repo, so that a local
+# build and CI use identical paths. Multi-GB; never committed.
+toolchain/llvm-project/
+toolchain/wasi-sdk/
