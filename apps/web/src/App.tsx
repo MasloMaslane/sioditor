@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Language } from '@sioditor/editor';
 import { PythonRuntime, type RunOutcome } from '@sioditor/runtime-python';
+import { CppToolchain, explainBuildErrors } from '@sioditor/toolchain-cpp';
+import { execute, type RunResult } from '@sioditor/runner';
 import { PACKS, PackManager, getPack, requestPersistence } from '@sioditor/storage';
 import { Editor } from './Editor.js';
 import { Console, type ConsoleLine } from './Console.js';
@@ -40,11 +42,13 @@ export function App() {
   const [status, setStatus] = useState<string>('');
 
   const pythonPack = usePack(packs, getPack('python'));
+  const cppPack = usePack(packs, getPack('cpp'));
   // Optional extras. Declared in PACKS but previously never rendered, which meant they
   // could not be fetched and so could not work offline - the runtime silently fell back
   // to pulling the wheel over the network.
   const numpyPack = usePack(packs, getPack('numpy'));
   const runtime = useRef<PythonRuntime>(null);
+  const toolchain = useRef<CppToolchain>(null);
   const abort = useRef<AbortController>(null);
 
   useEffect(() => {
@@ -71,9 +75,87 @@ export function App() {
     }
   };
 
+  const describeBuild = (result: RunResult): string => {
+    switch (result.outcome) {
+      case 'finished':
+        return `zakonczono w ${result.durationMs} ms, pamiec ${(result.peakMemoryBytes / 1048576).toFixed(1)} MB`;
+      case 'timed-out':
+        return `przekroczono limit czasu (${result.durationMs} ms)`;
+      case 'out-of-memory':
+        return 'przekroczono limit pamieci';
+      case 'crashed':
+        return result.exitCode === undefined
+          ? `program przerwany: ${result.detail ?? 'nieznany blad'}`
+          : `program zakonczyl sie kodem ${result.exitCode}`;
+      case 'stopped':
+        return `zatrzymano po ${result.durationMs} ms`;
+      case 'internal-error':
+        return `blad wewnetrzny: ${result.detail ?? 'nieznany'}`;
+    }
+  };
+
+  const runCpp = useCallback(async () => {
+    if (!cppPack.ready) {
+      setStatus('najpierw pobierz pakiet C++');
+      return;
+    }
+
+    setRunning(true);
+    setLines([]);
+    setStatus('kompilowanie...');
+
+    toolchain.current ??= new CppToolchain(getPack('cpp').baseUrl);
+    const controller = new AbortController();
+    abort.current = controller;
+
+    try {
+      const build = await toolchain.current.build({
+        source,
+        onPhase: (phase) => setStatus(phase === 'compiling' ? 'kompilowanie...' : 'linkowanie...'),
+      });
+
+      // Portability notes come back whether or not the build succeeded; they are about
+      // divergence from the judge, not about whether the code compiles here.
+      for (const note of build.notes) {
+        setLines((prev) => [
+          ...prev,
+          { stream: 'stderr', text: `${note.line}: ${note.message}\n` },
+        ]);
+      }
+
+      if (!build.ok || !build.moduleBytes) {
+        const explanation = explainBuildErrors(build.rawOutput);
+        setLines((prev) => [
+          ...prev,
+          ...(explanation ? [{ stream: 'stderr' as const, text: `${explanation}\n\n` }] : []),
+          { stream: 'stderr' as const, text: build.rawOutput },
+        ]);
+        setStatus(`blad kompilacji (${build.compileMs} ms)`);
+        return;
+      }
+
+      setStatus('uruchamianie...');
+      const result = await execute({
+        moduleBytes: build.moduleBytes,
+        stdin,
+        signal: controller.signal,
+      });
+      if (result.stdout) setLines((prev) => [...prev, { stream: 'stdout', text: result.stdout }]);
+      if (result.stderr) setLines((prev) => [...prev, { stream: 'stderr', text: result.stderr }]);
+      setStatus(`kompilacja ${build.compileMs + build.linkMs} ms, ${describeBuild(result)}`);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setLines((prev) => [...prev, { stream: 'stderr', text: `[sioditor] ${message}` }]);
+      setStatus(message);
+    } finally {
+      setRunning(false);
+      abort.current = null;
+    }
+  }, [cppPack.ready, source, stdin]);
+
   const run = useCallback(async () => {
     if (language === 'cpp') {
-      setStatus('kompilator C++ jeszcze nie jest podlaczony - patrz docs/toolchain.md');
+      await runCpp();
       return;
     }
     if (!pythonPack.ready) {
@@ -102,16 +184,13 @@ export function App() {
       setStatus(describe(outcome));
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      // Surface it in the console too. A runtime that fails to start would otherwise
-      // leave the output pane blank, which reads as "nothing happened" rather than
-      // "something broke" - and tells whoever is debugging nothing at all.
       setLines((prev) => [...prev, { stream: 'stderr', text: `[sioditor] ${message}` }]);
       setStatus(message);
     } finally {
       setRunning(false);
       abort.current = null;
     }
-  }, [language, pythonPack.ready, source, stdin]);
+  }, [language, runCpp, pythonPack.ready, source, stdin]);
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
@@ -134,7 +213,7 @@ export function App() {
           <button
             className="primary"
             onClick={() => void run()}
-            disabled={running || !pythonPack.checked}
+            disabled={running || !(language === 'cpp' ? cppPack : pythonPack).checked}
           >
             Uruchom
           </button>
@@ -144,8 +223,8 @@ export function App() {
         </div>
       </header>
 
-      <PackBar pack={pythonPack} />
-      <PackBar pack={numpyPack} />
+      <PackBar pack={language === 'cpp' ? cppPack : pythonPack} />
+      {language === 'python' && <PackBar pack={numpyPack} />}
 
       <main className="workspace">
         <Editor doc={source} language={language} onChange={setSource} onRun={() => void run()} />

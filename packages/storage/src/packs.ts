@@ -53,10 +53,12 @@ export interface PackProgress {
 }
 
 /**
- * Sizes are uncompressed bytes on disk. The Python and NumPy figures are measured, taken
- * from `scripts/vendor-pyodide.mjs` output; the C++ ones are placeholders until the build
- * in toolchain/ produces real artifacts. Either way the downloader prefers the
- * Content-Length it actually sees over anything written here.
+ * Sizes are uncompressed bytes on disk, all measured from the real artifacts - Python and
+ * NumPy from `scripts/vendor-pyodide.mjs`, C++ from the toolchain build. The downloader
+ * still prefers the Content-Length it actually sees over anything written here.
+ *
+ * The C++ pack is large uncompressed but compresses hard: about 22 MB over the wire with
+ * brotli, which the server config serves precompressed.
  */
 export const PACKS: readonly AssetPack[] = [
   {
@@ -66,11 +68,11 @@ export const PACKS: readonly AssetPack[] = [
     version: 'dev',
     baseUrl: '/toolchain/cpp/dev',
     optional: false,
-    description: 'clang, wasm-ld and the WASI sysroot. Needed to compile C++ offline.',
+    description: 'clang 23, wasm-ld and the WASI sysroot. Needed to compile C++ offline.',
     files: [
-      { name: 'clang.wasm', bytes: 40 * 1024 * 1024 },
-      { name: 'wasm-ld.wasm', bytes: 20 * 1024 * 1024 },
-      { name: 'sysroot.tar', bytes: 28 * 1024 * 1024 },
+      { name: 'clang.wasm', bytes: 61_458_337 },
+      { name: 'lld.wasm', bytes: 34_789_480 },
+      { name: 'sysroot.bin', bytes: 22_740_835 },
     ],
   },
   {

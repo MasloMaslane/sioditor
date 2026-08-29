@@ -5,10 +5,15 @@
  * argument list compiles and links a C++23 program using <bits/stdc++.h>, __int128,
  * __builtin_popcountll and 5000-deep recursion.
  *
+ * Exceptions are deliberately absent. wasi-sdk 34.0's `eh` libc++ produces modules Chrome
+ * rejects as mixing legacy and new exception-handling instructions, and the inconsistency
+ * is inside the prebuilt archives rather than in anything we pass. The `noeh` multilib is
+ * self-consistent and is what ships; throwing code fails to link, and the diagnostics
+ * layer explains why.
+ *
  * Two things the first draft of this file got wrong, both caught by actually running it:
  * argv[0] is supplied by the runner and must not appear here, and -fwasm-exceptions is a
- * driver flag with no -cc1 spelling. Exceptions are therefore off for now; turning them on
- * means the `eh` libc++ multilib plus the right -cc1 exception-model flag.
+ * driver flag with no -cc1 spelling at all.
  *
  * Kept as one frozen set rather than something the UI can vary, because the precompiled
  * header is keyed to the exact clang revision, target triple and language options. A
@@ -42,6 +47,9 @@ export function compileArgs(input: string, output: string): string[] {
     '-emit-obj',
     '-O2',
     `-std=${CPP_STANDARD}`,
+    // The output pane is not a terminal, and clang would otherwise emit ANSI colour
+    // escapes that the user sees verbatim.
+    '-fno-color-diagnostics',
     // <csignal> in wasi-libc is a hard #error without this, and bits/stdc++.h pulls it in.
     // The matching -lwasi-emulated-signal is on the link line.
     '-D_WASI_EMULATED_SIGNAL',

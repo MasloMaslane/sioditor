@@ -11,7 +11,10 @@
  */
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat, mkdir, writeFile } from 'node:fs/promises';
-import { join, posix, relative } from 'node:path';
+import { dirname, join, posix, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const [sysrootArg, outArg] = process.argv.slice(2);
 if (!sysrootArg || !outArg) {
@@ -22,44 +25,62 @@ if (!sysrootArg || !outArg) {
 const TRIPLE = 'wasm32-wasip1';
 
 /**
- * Only the exception-enabled variant ships. Selecting it needs `-fwasm-exceptions` on the
- * compile line (the driver defaults to `noeh`), which flags.ts passes.
+ * The no-exceptions multilib.
+ *
+ * The `eh` variant would be preferable - std::stoi and vector::at throw - but wasi-sdk
+ * 34.0 ships it in a state Chrome rejects: linking against it produces a module that
+ * "uses a mix of legacy and new exception handling instructions", and no combination of
+ * -mllvm -wasm-use-legacy-eh on our own translation unit fixes it, because the
+ * inconsistency is inside the prebuilt archives. Verified against Chrome 151 and V8 in
+ * Node 23. See docs/toolchain.md.
+ *
+ * `noeh` is self-consistent and works. The cost is that throwing code fails to link;
+ * diagnostics.ts turns that into a comprehensible message.
  */
-const VARIANT = 'eh';
+const VARIANT = 'noeh';
 
-/** Clang's resource headers are ~7.8 MB, almost all x86/ARM/GPU intrinsics. Take the rest. */
-const RESOURCE_HEADERS = new Set([
-  '__stddef_max_align_t.h',
-  '__stddef_null.h',
-  '__stddef_nullptr_t.h',
-  '__stddef_offsetof.h',
-  '__stddef_ptrdiff_t.h',
-  '__stddef_rsize_t.h',
-  '__stddef_size_t.h',
-  '__stddef_unreachable.h',
-  '__stddef_wchar_t.h',
-  '__stddef_wint_t.h',
-  '__stdarg___gnuc_va_list.h',
-  '__stdarg___va_copy.h',
-  '__stdarg_va_arg.h',
-  '__stdarg_va_copy.h',
-  '__stdarg_va_list.h',
-  'stddef.h',
-  'stdarg.h',
-  'stdint.h',
-  'limits.h',
-  'float.h',
-  'stdbool.h',
-  'stdalign.h',
-  'iso646.h',
-  'inttypes.h',
-  'stdckdint.h',
-  'stdatomic.h',
-  'stdnoreturn.h',
-  '__float_types.h',
-  'module.modulemap',
-  'wasm_simd128.h',
-]);
+/**
+ * Clang's resource headers are ~7.5 MB, almost all of it architecture intrinsics for
+ * targets a wasm build will never see. Excluding by architecture rather than listing the
+ * keepers by name: clang splits these headers further every few releases (23 introduced
+ * the `__*_header_macro.h` family), and an allowlist silently omits the new ones, which
+ * surfaces much later as "'__float_header_macro.h' file not found" in the middle of
+ * <cfloat>. A denylist lets new helpers through by default.
+ *
+ * This keeps roughly 500 KB.
+ */
+const ARCH_SPECIFIC_HEADER = new RegExp(
+  [
+    'intrin',
+    'opencl',
+    'altivec',
+    'vecintrin',
+    'hexagon',
+    'hvx',
+    'arm_',
+    'arm64',
+    'armintr',
+    'aarch64',
+    'riscv',
+    'ppc',
+    's390',
+    'amdgpu',
+    'amdhsa',
+    'nvptx',
+    'cuda',
+    'hip_',
+    'sifive',
+    'andes',
+    'xtensa',
+    'msa',
+    'mm3dnow',
+    'spirv',
+    'gpu_',
+  ].join('|'),
+);
+
+/** wasm_simd128.h is the one intrinsics header that is relevant here. */
+const KEEP_ANYWAY = new Set(['wasm_simd128.h']);
 
 async function walk(dir) {
   const out = [];
@@ -88,7 +109,11 @@ async function collect(sysroot) {
   const cRoot = join(sysroot, 'include', TRIPLE);
   for (const file of await walk(cRoot)) {
     const rel = relative(cRoot, file).split(/[\\/]/).join('/');
-    if (rel.startsWith(`${VARIANT}/`) || rel.startsWith('noeh/')) continue;
+    // Skip every multilib subtree, not just the one we are not using: the C++ headers
+    // are collected separately above, and letting them through here would ship both
+    // variants. (This filter previously named the variants explicitly and silently
+    // doubled the image when VARIANT changed.)
+    if (rel.startsWith('eh/') || rel.startsWith('noeh/')) continue;
     add(file, posix.join('/sysroot/include', rel));
   }
 
@@ -113,12 +138,53 @@ async function collect(sysroot) {
     }
   }
 
-  // __int128 lowers to __multi3, which lives in the builtins archive.
-  for (const file of await walk(join(sysroot, 'lib'))) {
-    if (/libclang_rt\.builtins.*\.a$/.test(file) && file.includes('wasip1')) {
-      add(file, '/sysroot/lib/libclang_rt.builtins.a');
+  // Clang's own resource headers (stddef.h, stdarg.h, the __stddef_* family). Without
+  // these nothing compiles: libc++ reaches them through #include_next.
+  // sysroot is <sdk>/share/wasi-sysroot, so the SDK root is two levels up.
+  const resourceRoot = join(sysroot, '..', '..', 'lib', 'clang');
+  try {
+    for (const version of await readdir(resourceRoot)) {
+      const dir = join(resourceRoot, version, 'include');
+      for (const file of await walk(dir)) {
+        const rel = relative(dir, file).split(/[\\/]/).join('/');
+        if (rel.includes('/')) continue; // skip the per-architecture subdirectories
+        if (!KEEP_ANYWAY.has(rel) && ARCH_SPECIFIC_HEADER.test(rel)) continue;
+        add(file, posix.join('/sysroot/include/clang', rel));
+      }
       break;
     }
+  } catch {
+    console.warn('  ! no clang resource headers found');
+  }
+
+  // GNU compatibility headers - <bits/stdc++.h> and the pb_ds shim. Placed ahead of the
+  // libc++ tree on the include path, which is what makes OI code compile unchanged.
+  const gnuCompat = join(repoRoot, 'packages/gnu-compat/include');
+  try {
+    for (const file of await walk(gnuCompat)) {
+      const rel = relative(gnuCompat, file).split(/[\\/]/).join('/');
+      add(file, posix.join('/sysroot/include', rel));
+    }
+  } catch {
+    console.warn('  ! no gnu-compat headers found');
+  }
+
+  // __int128 lowers to __multi3, which lives in the builtins archive.
+  // wasi-sdk-34 keeps this under lib/clang/<v>/lib/, not in the sysroot.
+  for (const root of [join(sysroot, 'lib'), join(sysroot, '..', '..', 'lib', 'clang')]) {
+    let found = false;
+    try {
+      for (const file of await walk(root)) {
+        if (!/libclang_rt\.builtins\.a$/.test(file)) continue;
+        if (!/wasm32-unknown-wasip1(?!-)/.test(file)) continue;
+        add(file, '/sysroot/lib/libclang_rt.builtins.a');
+        found = true;
+        break;
+      }
+    } catch {
+      /* directory absent; try the next candidate */
+    }
+    if (found) break;
   }
 
   return entries;
@@ -133,7 +199,17 @@ async function main() {
   const chunks = [];
   let offset = 0;
 
+  const seen = new Map();
   for (const { source, virtualPath } of entries) {
+    // A duplicate silently overwrites, which would mean shipping a header that is not the
+    // one anybody thinks it is. Fail loudly instead.
+    if (seen.has(virtualPath)) {
+      throw new Error(
+        `two sources map to ${virtualPath}:\n  ${seen.get(virtualPath)}\n  ${source}`,
+      );
+    }
+    seen.set(virtualPath, source);
+
     const bytes = await readFile(source);
     files[virtualPath] = [offset, bytes.byteLength];
     chunks.push(bytes);

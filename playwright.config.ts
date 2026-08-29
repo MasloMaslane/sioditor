@@ -2,14 +2,24 @@ import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Some environments (our CI container included) ship a Chromium that does not match the
- * build @playwright/test would fetch. Point at it when it is there rather than pulling a
- * second browser down; fall back to Playwright's own resolution everywhere else.
+ * Which browser to drive, in order of preference:
+ *
+ *  1. A Chromium already staged by the environment (our CI container does this, at a
+ *     version that will not match what @playwright/test would fetch).
+ *  2. The developer's installed Google Chrome, on a machine that has one. This keeps a
+ *     local test run from silently downloading a second browser.
+ *  3. Playwright's own managed Chromium, which is what GitHub Actions installs.
  */
-const PREINSTALLED_CHROMIUM = '/opt/pw-browsers/chromium';
-const launchOptions = existsSync(PREINSTALLED_CHROMIUM)
-  ? { executablePath: PREINSTALLED_CHROMIUM }
-  : {};
+const STAGED_CHROMIUM = '/opt/pw-browsers/chromium';
+const SYSTEM_CHROME = '/Applications/Google Chrome.app';
+
+const browser: { launchOptions?: { executablePath: string }; channel?: string } = existsSync(
+  STAGED_CHROMIUM,
+)
+  ? { launchOptions: { executablePath: STAGED_CHROMIUM } }
+  : !process.env.CI && existsSync(SYSTEM_CHROME)
+    ? { channel: 'chrome' }
+    : {};
 
 /**
  * Runs against the production build, not the dev server: the service worker, the real
@@ -27,7 +37,7 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     baseURL: 'http://localhost:4173',
     trace: 'retain-on-failure',
-    launchOptions,
+    ...browser,
   },
   webServer: {
     command: 'pnpm --filter @sioditor/web preview --port 4173 --strictPort',

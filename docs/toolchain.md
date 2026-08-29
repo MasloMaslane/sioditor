@@ -123,6 +123,20 @@ Stage A takes about a minute on ten cores; stage B about twenty. Under wasmtime 
 compile of a `<bits/stdc++.h>` translation unit is ~10 s and the link ~0.3 s - the compile
 figure is why the precompiled header matters, not a reason to doubt the approach.
 
+### In the browser
+
+Wired up and verified in Chrome, not just under wasmtime. A first visit fetches
+`clang.wasm`, `lld.wasm` and `sysroot.bin` into Cache Storage; after that the toolchain
+works with the network off, like the Python one.
+
+Measured in-browser on an M-series Mac: compile plus link of the sample is about 2.6 s and
+the program then runs in single-digit milliseconds. The compile figure is dominated by
+parsing `<bits/stdc++.h>` from scratch, which is what a precompiled header would remove.
+
+The compiler worker keeps clang and lld loaded between builds - re-fetching ninety
+megabytes per build would be absurd - but creates a fresh `WebAssembly.Instance` for each
+invocation, because both tools call `exit()` and leave their memory unusable.
+
 ### It works, end to end
 
 Verified by actually running it, not by inspection:
@@ -191,7 +205,26 @@ distribution point, so it stays a flagged fallback.
 **Working:** `__int128` (lowers to `__multi3`, so `libclang_rt.builtins.a` must be
 linked), `__builtin_popcountll`, `__builtin_ctzll`, `__builtin_clzll`.
 
-**Not working:** `-fsanitize=address,undefined` (Emscripten has them, wasi-sdk does
+**Not working: exceptions.** This is the biggest gap, and it is not something our flags
+can fix. wasi-sdk 34.0's `eh` libc++ produces modules Chrome refuses to compile, reporting
+that the module "uses a mix of legacy and new exception handling instructions". Forcing
+our own translation unit to either flavour (`-mllvm -wasm-use-legacy-eh`, or the default
+exnref) does not help, because the inconsistency is inside the prebuilt archives.
+Confirmed against Chrome 151 and V8 in Node 23, and reproducible with the native wasi-sdk
+driver, so it is not specific to our wasm clang.
+
+So the `noeh` multilib ships, and it is self-consistent. The consequences:
+
+- `throw` is a compile error: _cannot use 'throw' with exceptions disabled_.
+- Functions that throw internally - `std::stoi`, `vector::at`, `std::bad_alloc` - abort
+  instead. Suggest `std::strtoll` and `operator[]`.
+- `packages/toolchain-cpp/src/diagnostics.ts` rewrites both the compile-time and the
+  link-time form into a message that says the limitation belongs to this editor.
+
+Worth revisiting when wasi-sdk ships a consistent `eh` multilib, or by building libc++
+ourselves alongside clang.
+
+**Also not working:** `-fsanitize=address,undefined` (Emscripten has them, wasi-sdk does
 not), x86 intrinsics, `#pragma GCC optimize/target` (ignored with a warning).
 
 ## Building it on your own machine

@@ -32,6 +32,30 @@ export function parseDiagnostics(stderr: string): Diagnostic[] {
   return diagnostics;
 }
 
+/**
+ * Turns build failures with a known cause into something a contestant can act on.
+ *
+ * Exceptions are the case that matters. The sysroot ships the no-exceptions libc++ (see
+ * flags.ts for why), so a direct `throw` is rejected at compile time with "cannot use
+ * 'throw' with exceptions disabled" - accurate, but it does not say that this is a
+ * property of this editor rather than of their code. Library code that throws shows up
+ * instead as an undefined `__cxa_throw` at link, which is worse.
+ */
+export function explainBuildErrors(stderr: string): string | undefined {
+  if (/exceptions disabled|__cxa_throw|__cxa_allocate_exception|__cxa_begin_catch/.test(stderr)) {
+    return (
+      'Wyjatki (throw / try / catch) nie sa na razie obslugiwane w tym edytorze - ' +
+      'biblioteka standardowa jest zbudowana bez nich. Dotyczy to tez funkcji, ktore ' +
+      'rzucaja same z siebie, np. std::stoi czy vector::at. Uzyj wariantow, ktore nie ' +
+      'rzucaja (std::strtoll, operator[]).'
+    );
+  }
+  if (/undefined symbol: main\b/.test(stderr)) {
+    return 'Brakuje funkcji main().';
+  }
+  return undefined;
+}
+
 export function hasErrors(diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.severity === 'error');
 }
