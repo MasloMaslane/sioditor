@@ -8,6 +8,8 @@ on:
     paths:
       - 'toolchain/patches/**'
       - 'toolchain/wasi-compat/**'
+      - 'toolchain/corpus/**'
+      - 'packages/gnu-compat/**'
       - 'toolchain/versions.env'
       - '.github/workflows/toolchain-patches.yml'
   pull_request:
@@ -29,3 +31,15 @@ jobs:
 
       - name: Compat layer compiles, links, and fixes the real call patterns
         run: ./toolchain/wasi-compat/verify.sh /opt/wasi-sdk
+
+      # Cross-checks the GNU compatibility shims against the standard library. Needs only
+      # the wasi-sdk this job already has, so it costs a minute rather than a full build.
+      - name: Install wasmtime
+        run: |
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+
+      - name: OI corpus
+        env:
+          WASI_SDK: /opt/wasi-sdk
+        run: ./toolchain/corpus/run.sh

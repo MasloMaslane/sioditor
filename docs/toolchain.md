@@ -194,13 +194,28 @@ different `numeric_limits`. Geometry tuned to x87 epsilon will behave differentl
 entry with `__has_include` and drop what C++20/23 removed (`<ciso646>`, `<cstdbool>`,
 `<cstdalign>`).
 
-**`__gnu_pbds`** has no libc++ equivalent and no maintained port. The plan is a
-clean-room ~250-line header providing `tree` with `tree_order_statistics_node_update`
-(`find_by_order`, `order_of_key`) over a randomized treap, plus `gp_hash_table`. That
-covers the overwhelming majority of OI use. A verbatim port of libstdc++'s `ext/pb_ds`
-is possible — it depends on remarkably little (`debug/debug.h`, `bits/c++config.h`,
-`ext/typelist.h`, `ext/type_traits.h`) — but it would make this repo a GPLv3
-distribution point, so it stays a flagged fallback.
+**`__gnu_pbds`** has no libc++ equivalent and no maintained port, so
+`packages/gnu-compat/include/ext/pb_ds/` is a clean-room replacement: `tree` with
+`tree_order_statistics_node_update` (`find_by_order`, `order_of_key`) over a treap, plus
+`gp_hash_table` and `cc_hash_table` as aliases, which is all they are used for here.
+
+A treap rather than a red-black tree. Balance is expected rather than worst case, but
+priorities are drawn independently of the keys, so no input can force the bad case - and
+the result is a few hundred lines that can be read and checked, instead of a port of 1.1
+MB of policy-based templates resting on libstdc++ internals libc++ does not have. A
+verbatim port would also make this repo a GPLv3 distribution point.
+
+Verified rather than asserted. `toolchain/corpus/` cross-checks every operation against
+`std::set` over 20,000 randomised steps - insert, erase, `order_of_key`, `find_by_order`,
+iteration order, both bounds, `--end()`, the map form, `gp_hash_table` - and measures
+scaling: 50k/100k/200k elements take 28/65/160 ms, so about 2.4x per doubling rather than
+the 4x of an accidental quadratic, and 200,000 _sorted_ inserts finish in 28 ms, which is
+the case that degenerates an unbalanced tree.
+
+Not implemented, and failing to compile with a message that says so rather than behaving
+differently: `split` and `join` on trees, the trie and priority-queue containers, and the
+non-`rb_tree_tag` tags. Iterators are also invalidated by insert and erase, unlike the
+GNU original.
 
 **Working:** `__int128` (lowers to `__multi3`, so `libclang_rt.builtins.a` must be
 linked), `__builtin_popcountll`, `__builtin_ctzll`, `__builtin_clzll`.

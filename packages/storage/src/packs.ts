@@ -72,7 +72,7 @@ export const PACKS: readonly AssetPack[] = [
     files: [
       { name: 'clang.wasm', bytes: 61_458_337 },
       { name: 'lld.wasm', bytes: 34_789_480 },
-      { name: 'sysroot.bin', bytes: 22_740_835 },
+      { name: 'sysroot.bin', bytes: 22_755_492 },
     ],
   },
   {
