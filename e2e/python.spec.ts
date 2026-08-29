@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { preparePack, runAll, setFirstCase, setSource, testCase } from './helpers.js';
 
 /**
  * Attach browser-side diagnostics to every test.
@@ -60,10 +61,9 @@ test.describe('python runtime', () => {
     await page.goto('/');
     await downloadPacks(page, ['python']);
 
-    await page.getByRole('button', { name: 'Uruchom' }).click();
+    await runAll(page);
     // 1 + 2 + 3 + 4 from the default stdin.
-    await expect(page.locator('.console pre')).toContainText('10');
-    await expect(page.locator('.status')).toContainText('zakonczono');
+    await expect(testCase(page).output).toContainText('10', { timeout: 120_000 });
   });
 
   test('still runs with the network gone', async ({ page, context }) => {
@@ -80,8 +80,8 @@ test.describe('python runtime', () => {
     // The pack probe re-runs on load. Wait for it, rather than racing it.
     await expect(page.locator('[data-pack="python"]')).toContainText('gotowy');
 
-    await page.getByRole('button', { name: 'Uruchom' }).click();
-    await expect(page.locator('.console pre')).toContainText('10');
+    await runAll(page);
+    await expect(testCase(page).output).toContainText('10');
   });
 
   test('runs numpy from the cached pack while offline', async ({ page, context }) => {
@@ -98,24 +98,21 @@ test.describe('python runtime', () => {
     await expect(page.locator('[data-pack="python"]')).toContainText('gotowy');
     await expect(page.locator('[data-pack="numpy"]')).toContainText('gotowy');
 
-    await page.locator('.cm-content').click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.type('import numpy\nprint(numpy.array([1, 2, 3]).sum())');
+    await setSource(page, 'import numpy\nprint(numpy.array([1, 2, 3]).sum())');
 
-    await page.getByRole('button', { name: 'Uruchom' }).click();
-    await expect(page.locator('.console pre')).toContainText('6');
+    await runAll(page);
+    await expect(testCase(page).output).toContainText('6');
   });
 
-  test('Run always produces feedback, never silence', async ({ page }) => {
-    // The regression this guards: the pack readiness probe had not resolved when Run was
-    // clicked, so the app took an early-return path that produced no output and no
-    // status - the user saw nothing at all. Asserting the transient disabled state would
-    // itself be a race, so this asserts the invariant instead: a click always says
-    // something. Run is additionally gated on the probe having landed.
+  test('will not offer Run until the runtime is actually available', async ({ page }) => {
+    // Previously Run was always enabled and a click with no pack produced silence. It is
+    // now gated on the pack, and the bar says what is missing.
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Uruchom' })).toBeEnabled();
-    await page.getByRole('button', { name: 'Uruchom' }).click();
-    await expect(page.locator('.status')).not.toBeEmpty();
+    await expect(page.locator('[data-pack="python"]')).toContainText('Pobierz teraz');
+    await expect(page.getByRole('button', { name: 'Uruchom wszystkie' })).toBeDisabled();
+
+    await downloadPacks(page, ['python']);
+    await expect(page.getByRole('button', { name: 'Uruchom wszystkie' })).toBeEnabled();
   });
 
   test('cached pack entries carry no stale Content-Encoding', async ({ page }) => {
@@ -142,5 +139,21 @@ test.describe('python runtime', () => {
     });
 
     expect(offenders).toEqual([]);
+  });
+
+  test('preserves newlines in multi-line output', async ({ page }) => {
+    // Pyodide's batched stdout callback fires per line with the newline stripped, so
+    // joining chunks naively ran every line together - "1\n9\n3" arrived as "193", which
+    // made every multi-line comparison meaningless.
+    // preparePack navigates first; the local downloadPacks helper assumes an open page,
+    // so calling it on a blank tab waited three minutes for a button that was never there.
+    await preparePack(page, 'python');
+    await setSource(page, 'for i in (1, 9, 3):\n    print(i)');
+    await setFirstCase(page, '', '1\n9\n3');
+
+    await runAll(page);
+    // Byte-identical but for the final newline, which is a match.
+    await expect(testCase(page).chip).toHaveText('zgodne', { timeout: 120_000 });
+    await expect(testCase(page).output).toHaveText('1\n9\n3\n');
   });
 });

@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import type { Language } from '@sioditor/editor';
-import { PythonRuntime, type RunOutcome } from '@sioditor/runtime-python';
-import { CppToolchain, explainBuildErrors, RECURSION_LIMIT_NOTE } from '@sioditor/toolchain-cpp';
-import { execute, type RunResult } from '@sioditor/runner';
-import { PACKS, PackManager, getPack, requestPersistence } from '@sioditor/storage';
+import { PACKS, PackManager, getPack, requestPersistence, testsOf } from '@sioditor/storage';
+import type { TestCase } from '@sioditor/storage';
 import { Editor } from './Editor.js';
 import { ProblemList } from './ProblemList.js';
-import { STARTERS, useWorkspace } from './useWorkspace.js';
-import { Console, type ConsoleLine } from './Console.js';
+import { TestPanel } from './TestPanel.js';
 import { PackBar } from './PackBar.js';
 import { usePack } from './usePack.js';
+import { useRun } from './useRun.js';
+import { STARTERS, useWorkspace } from './useWorkspace.js';
 
 const packs = new PackManager();
 
@@ -17,177 +16,42 @@ export function App() {
   const workspace = useWorkspace();
   const current = workspace.current;
   const language: Language = current?.language ?? 'python';
-  const source = current?.source ?? '';
-  const stdin = current?.stdin ?? '';
-  const [lines, setLines] = useState<ConsoleLine[]>([]);
-  const [running, setRunning] = useState(false);
-  const [status, setStatus] = useState<string>('');
+  const runner = useRun();
 
   const pythonPack = usePack(packs, getPack('python'));
-  const cppPack = usePack(packs, getPack('cpp'));
-  // Optional extras. Declared in PACKS but previously never rendered, which meant they
-  // could not be fetched and so could not work offline - the runtime silently fell back
-  // to pulling the wheel over the network.
   const numpyPack = usePack(packs, getPack('numpy'));
-  const runtime = useRef<PythonRuntime>(null);
-  const toolchain = useRef<CppToolchain>(null);
-  const abort = useRef<AbortController>(null);
+  const cppPack = usePack(packs, getPack('cpp'));
+  const activePack = language === 'cpp' ? cppPack : pythonPack;
 
   useEffect(() => {
     void requestPersistence();
   }, []);
 
+  // Results belong to the problem that produced them.
+  useEffect(() => {
+    runner.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id]);
+
+  const cases = current ? testsOf(current) : [];
+
   const switchLanguage = useCallback(
     (next: Language) => {
       if (!current || current.language === next) return;
-      // Changing an open problem's language would leave source in the wrong language, so
-      // this rewrites both together via the starter for that language.
+      // The source belongs to a language, so both change together.
       workspace.update({ language: next, source: STARTERS[next] });
-      setLines([]);
-      setStatus('');
+      runner.clear();
     },
-    [current, workspace],
+    [current, runner, workspace],
   );
 
-  const describe = (outcome: RunOutcome): string => {
-    switch (outcome.kind) {
-      case 'finished':
-        return `zakonczono w ${outcome.durationMs} ms`;
-      case 'error':
-        return `blad wykonania po ${outcome.durationMs} ms`;
-      case 'timeout':
-        return `przekroczono limit czasu (${outcome.durationMs} ms)`;
-      case 'stopped':
-        return `zatrzymano po ${outcome.durationMs} ms`;
-    }
-  };
-
-  const describeBuild = (result: RunResult): string => {
-    switch (result.outcome) {
-      case 'finished':
-        return `zakonczono w ${result.durationMs} ms, pamiec ${(result.peakMemoryBytes / 1048576).toFixed(1)} MB`;
-      case 'timed-out':
-        return `przekroczono limit czasu (${result.durationMs} ms)`;
-      case 'out-of-memory':
-        return 'przekroczono limit pamieci';
-      case 'stack-overflow':
-        return 'przepelnienie stosu';
-      case 'crashed':
-        return result.exitCode === undefined
-          ? `program przerwany: ${result.detail ?? 'nieznany blad'}`
-          : `program zakonczyl sie kodem ${result.exitCode}`;
-      case 'stopped':
-        return `zatrzymano po ${result.durationMs} ms`;
-      case 'internal-error':
-        return `blad wewnetrzny: ${result.detail ?? 'nieznany'}`;
-    }
-  };
-
-  const runCpp = useCallback(async () => {
-    if (!cppPack.ready) {
-      setStatus('najpierw pobierz pakiet C++');
+  const onRun = useCallback(() => {
+    if (!current) return;
+    if (!activePack.ready) {
       return;
     }
-
-    setRunning(true);
-    setLines([]);
-    setStatus('kompilowanie...');
-
-    toolchain.current ??= new CppToolchain(getPack('cpp').baseUrl);
-    const controller = new AbortController();
-    abort.current = controller;
-
-    try {
-      const build = await toolchain.current.build({
-        source,
-        onPhase: (phase) => setStatus(phase === 'compiling' ? 'kompilowanie...' : 'linkowanie...'),
-      });
-
-      // Portability notes come back whether or not the build succeeded; they are about
-      // divergence from the judge, not about whether the code compiles here.
-      for (const note of build.notes) {
-        setLines((prev) => [
-          ...prev,
-          { stream: 'stderr', text: `${note.line}: ${note.message}\n` },
-        ]);
-      }
-
-      if (!build.ok || !build.moduleBytes) {
-        const explanation = explainBuildErrors(build.rawOutput);
-        setLines((prev) => [
-          ...prev,
-          ...(explanation ? [{ stream: 'stderr' as const, text: `${explanation}\n\n` }] : []),
-          { stream: 'stderr' as const, text: build.rawOutput },
-        ]);
-        setStatus(`blad kompilacji (${build.compileMs} ms)`);
-        return;
-      }
-
-      setStatus('uruchamianie...');
-      const result = await execute({
-        moduleBytes: build.moduleBytes,
-        stdin,
-        signal: controller.signal,
-      });
-      if (result.stdout) setLines((prev) => [...prev, { stream: 'stdout', text: result.stdout }]);
-      if (result.stderr) setLines((prev) => [...prev, { stream: 'stderr', text: result.stderr }]);
-      if (result.outcome === 'stack-overflow') {
-        // The browser's call stack is far shallower than a judge's, so a correct deep
-        // recursion still fails here. Saying so is the difference between a useful tool
-        // and one that makes a contestant doubt a working solution.
-        setLines((prev) => [...prev, { stream: 'stderr', text: `\n${RECURSION_LIMIT_NOTE}\n` }]);
-      }
-      setStatus(`kompilacja ${build.compileMs + build.linkMs} ms, ${describeBuild(result)}`);
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      setLines((prev) => [...prev, { stream: 'stderr', text: `[sioditor] ${message}` }]);
-      setStatus(message);
-    } finally {
-      setRunning(false);
-      abort.current = null;
-    }
-  }, [cppPack.ready, source, stdin]);
-
-  const run = useCallback(async () => {
-    if (language === 'cpp') {
-      await runCpp();
-      return;
-    }
-    if (!pythonPack.ready) {
-      setStatus('najpierw pobierz pakiet Pythona');
-      return;
-    }
-
-    setRunning(true);
-    setLines([]);
-    setStatus('uruchamianie...');
-
-    runtime.current ??= new PythonRuntime(getPack('python').baseUrl);
-    const controller = new AbortController();
-    abort.current = controller;
-
-    try {
-      const outcome = await runtime.current.run({
-        source,
-        stdin,
-        onOutput: ({ stream, text }) => setLines((prev) => [...prev, { stream, text }]),
-        signal: controller.signal,
-      });
-      if (outcome.kind === 'error') {
-        setLines((prev) => [...prev, { stream: 'stderr', text: outcome.message }]);
-      }
-      setStatus(describe(outcome));
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      setLines((prev) => [...prev, { stream: 'stderr', text: `[sioditor] ${message}` }]);
-      setStatus(message);
-    } finally {
-      setRunning(false);
-      abort.current = null;
-    }
-  }, [language, runCpp, pythonPack.ready, source, stdin]);
-
-  const stop = useCallback(() => abort.current?.abort(), []);
+    void runner.run(current, cases);
+  }, [activePack.ready, cases, current, runner]);
 
   if (!workspace.loaded) {
     return <div className="app loading">Wczytywanie...</div>;
@@ -211,39 +75,48 @@ export function App() {
         <div className="actions">
           <button
             className="primary"
-            onClick={() => void run()}
-            disabled={running || !(language === 'cpp' ? cppPack : pythonPack).checked}
+            onClick={onRun}
+            disabled={runner.running || !activePack.checked || !activePack.ready}
+            title={activePack.ready ? 'Ctrl+Enter' : 'Najpierw pobierz pakiet'}
           >
-            Uruchom
+            Uruchom wszystkie
           </button>
-          <button onClick={stop} disabled={!running}>
+          <button onClick={runner.stop} disabled={!runner.running}>
             Zatrzymaj
           </button>
         </div>
       </header>
 
-      <PackBar pack={language === 'cpp' ? cppPack : pythonPack} />
-      {language === 'python' && <PackBar pack={numpyPack} />}
+      {PACKS.filter(
+        (pack) => pack.id === activePack.pack.id || (language === 'python' && pack.id === 'numpy'),
+      ).map((pack) => (
+        <PackBar key={pack.id} pack={pack.id === 'numpy' ? numpyPack : activePack} />
+      ))}
 
       <main className="workspace">
         <ProblemList workspace={workspace} />
+
         <Editor
           key={current?.id ?? 'none'}
-          doc={source}
+          doc={current?.source ?? ''}
           language={language}
           onChange={(next) => workspace.update({ source: next })}
-          onRun={() => void run()}
+          onRun={onRun}
         />
+
         <aside className="side">
-          <label className="panel">
-            <span className="panel-title">Wejscie</span>
-            <textarea
-              value={stdin}
-              onChange={(event) => workspace.update({ stdin: event.target.value })}
-              spellCheck={false}
-            />
-          </label>
-          <Console lines={lines} status={status} />
+          <TestPanel
+            cases={cases}
+            results={runner.results}
+            onChange={(next: readonly TestCase[]) => workspace.update({ tests: next })}
+          />
+          {(runner.buildOutput || runner.status) && (
+            <div className="panel build">
+              <span className="panel-title">Kompilacja</span>
+              {runner.buildOutput && <pre>{runner.buildOutput}</pre>}
+              {runner.status && <span className="status">{runner.status}</span>}
+            </div>
+          )}
         </aside>
       </main>
     </div>

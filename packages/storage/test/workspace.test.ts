@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Workspace, MAX_REVISIONS_PER_PROBLEM, type Problem } from '../src/workspace.js';
+import { Workspace, MAX_REVISIONS_PER_PROBLEM, testsOf, type Problem } from '../src/workspace.js';
 
 /**
  * Deleting is asynchronous and is *blocked* while any connection is open, so this has to
@@ -100,5 +100,28 @@ describe('revisions', () => {
     await workspace.recordRevision('p2', 'two', 0);
     expect(await workspace.revisions('p1')).toHaveLength(1);
     expect(await workspace.revisions('p2')).toHaveLength(1);
+  });
+});
+
+describe('test cases on a problem', () => {
+  it('uses the cases when present', () => {
+    const cases = [{ id: 'a', input: '1', expected: '1' }];
+    expect(testsOf(problem({ tests: cases }))).toEqual(cases);
+  });
+
+  it('turns a pre-panel stdin into one input-only case, rather than losing it', () => {
+    const cases = testsOf(problem({ stdin: '1 2 3' }));
+    expect(cases).toHaveLength(1);
+    expect(cases[0]!.input).toBe('1 2 3');
+    expect(cases[0]!.expected).toBe('');
+  });
+
+  it('prefers cases over a leftover stdin', () => {
+    const cases = [{ id: 'a', input: 'x', expected: '' }];
+    expect(testsOf(problem({ tests: cases, stdin: 'old' }))).toEqual(cases);
+  });
+
+  it('is empty when there is nothing at all', () => {
+    expect(testsOf(problem({ stdin: '   ' }))).toEqual([]);
   });
 });

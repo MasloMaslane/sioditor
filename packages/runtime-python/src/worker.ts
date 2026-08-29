@@ -43,8 +43,15 @@ async function run(request: RunRequest): Promise<void> {
   if (!pyodide) throw new Error('python worker used before init');
   const { runId, source, stdin } = request;
 
-  pyodide.setStdout({ batched: (text) => post({ kind: 'output', runId, stream: 'stdout', text }) });
-  pyodide.setStderr({ batched: (text) => post({ kind: 'output', runId, stream: 'stderr', text }) });
+  // Pyodide's `batched` callback fires once per line, with the newline stripped. Joining
+  // the chunks as-is therefore runs every line together: a program printing 1, 9 and 3 on
+  // separate lines produced "193", and comparing that against expected output is
+  // meaningless. Put the newline back.
+  const emit = (stream: 'stdout' | 'stderr') => ({
+    batched: (text: string) => post({ kind: 'output', runId, stream, text: `${text}\n` }),
+  });
+  pyodide.setStdout(emit('stdout'));
+  pyodide.setStderr(emit('stderr'));
 
   // Pyodide asks for one line at a time and treats null as EOF. Splitting up front keeps
   // input() behaving the way a program reading a test case expects.

@@ -7,4 +7,6 @@ export type { StorageEstimate } from './quota.js';
 export { requestPersistence, estimateStorage } from './quota.js';
 export type { Language } from './types.js';
 export type { Problem, Revision } from './workspace.js';
-export { Workspace, MAX_REVISIONS_PER_PROBLEM } from './workspace.js';
+export { Workspace, MAX_REVISIONS_PER_PROBLEM, testsOf } from './workspace.js';
+export type { TestCase, Comparison, ComparisonVerdict } from './tests.js';
+export { compareOutput, parsePastedTests } from './tests.js';

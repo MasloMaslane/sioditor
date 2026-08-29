@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { setSource } from './helpers.js';
+import { setFirstCase, setSource, testCase } from './helpers.js';
 
 /**
  * Persistence. The failure this guards against is the worst one this tool has: a
@@ -16,14 +16,14 @@ test.describe('workspace', () => {
     await expect(page.locator('.cm-content')).toContainText('survives a reload');
   });
 
-  test('keeps the test input too', async ({ page }) => {
+  test('keeps the test cases too', async ({ page }) => {
     await page.goto('/');
-    const stdin = page.locator('textarea');
-    await stdin.fill('11 22 33');
+    await setFirstCase(page, '11 22 33', '66');
     await page.waitForTimeout(1500);
 
     await page.reload();
-    await expect(page.locator('textarea')).toHaveValue('11 22 33');
+    await expect(testCase(page).input).toHaveValue('11 22 33');
+    await expect(testCase(page).expected).toHaveValue('66');
   });
 
   test('holds several problems at once and switches between them', async ({ page }) => {
@@ -57,6 +57,6 @@ test.describe('workspace', () => {
     await page.locator('.problems li').first().hover();
     await page.locator('.problem-remove').first().click();
     await expect(page.locator('.problems li')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Uruchom' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Uruchom wszystkie' })).toBeVisible();
   });
 });

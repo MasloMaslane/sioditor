@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Language } from './types.js';
+import type { TestCase } from './tests.js';
 
 /**
  * A problem: one source file, its tests, its limits.
@@ -12,7 +13,13 @@ export interface Problem {
   readonly name: string;
   readonly language: Language;
   readonly source: string;
-  readonly stdin: string;
+  /**
+   * Optional because problems saved before the test panel existed do not have it, and
+   * IndexedDB stores records as they were written. Read it through `testsOf`.
+   */
+  readonly tests?: readonly TestCase[];
+  /** @deprecated Superseded by `tests`; kept so old records still open. */
+  readonly stdin?: string;
   readonly timeLimitMs: number;
   readonly memoryLimitBytes: number;
   readonly updatedAt: number;
@@ -49,6 +56,20 @@ export const MAX_REVISIONS_PER_PROBLEM = 30;
 
 /** Consecutive saves closer together than this replace the previous revision. */
 const REVISION_COALESCE_MS = 60_000;
+
+/**
+ * A problem's test cases, including those saved before the panel existed.
+ *
+ * Those older records carry a single `stdin` string, which becomes one input-only case -
+ * so upgrading does not silently drop the input somebody had typed.
+ */
+export function testsOf(problem: Problem): readonly TestCase[] {
+  if (problem.tests && problem.tests.length > 0) return problem.tests;
+  if (problem.stdin && problem.stdin.trim() !== '') {
+    return [{ id: 'legacy', input: problem.stdin, expected: '' }];
+  }
+  return [];
+}
 
 export class Workspace {
   private dbPromise: Promise<IDBPDatabase<WorkspaceSchema>> | undefined;

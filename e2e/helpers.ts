@@ -5,9 +5,8 @@ import { expect, type Page } from '@playwright/test';
  *
  * Pastes rather than types. `keyboard.type` feeds CodeMirror one character at a time,
  * which triggers auto-indent and bracket closing and quietly mangles any multi-line
- * program - an earlier version of these tests failed with compile errors for exactly that
- * reason, on source that was correct as written. Paste is inserted verbatim, and it is
- * also what a contestant actually does.
+ * program - an earlier version of these tests failed with compile errors on source that
+ * was correct as written. Paste is verbatim, and is what a contestant actually does.
  */
 export async function setSource(page: Page, source: string): Promise<void> {
   await page.locator('.cm-content').click();
@@ -26,11 +25,42 @@ export async function setSource(page: Page, source: string): Promise<void> {
   );
 }
 
-/** Downloads the C++ pack and waits for it to be usable. */
-export async function prepareCpp(page: Page): Promise<void> {
+/** Downloads a language pack and waits for it to be usable. */
+export async function preparePack(page: Page, language: 'cpp' | 'python'): Promise<void> {
   await page.goto('/');
-  // Scoped to the language switcher: "+ C++" in the problem list also matches on name.
-  await page.locator('.langs').getByRole('button', { name: 'C++' }).click();
-  await page.locator('[data-pack="cpp"]').getByRole('button', { name: 'Pobierz teraz' }).click();
-  await expect(page.locator('[data-pack="cpp"]')).toContainText('gotowy', { timeout: 300_000 });
+  if (language === 'cpp') {
+    // Scoped to the language switcher: "+ C++" in the problem list matches on name too.
+    await page.locator('.langs').getByRole('button', { name: 'C++' }).click();
+  }
+  const bar = page.locator(`[data-pack="${language}"]`);
+  const download = bar.getByRole('button', { name: 'Pobierz teraz' });
+  if (await download.isVisible().catch(() => false)) await download.click();
+  await expect(bar).toContainText('gotowy', { timeout: 300_000 });
 }
+
+export const prepareCpp = (page: Page) => preparePack(page, 'cpp');
+
+/** The nth test case's input and expected boxes. */
+export function testCase(page: Page, index = 0) {
+  const root = page.locator('.case').nth(index);
+  return {
+    root,
+    input: root.locator('textarea').nth(0),
+    expected: root.locator('textarea').nth(1),
+    output: root.locator('pre'),
+    chip: root.locator('.chip'),
+  };
+}
+
+/** Sets the first case, adding one if the problem has none. */
+export async function setFirstCase(page: Page, input: string, expected = ''): Promise<void> {
+  if ((await page.locator('.case').count()) === 0) {
+    await page.getByRole('button', { name: '+ test' }).click();
+  }
+  const first = testCase(page, 0);
+  await first.input.fill(input);
+  await first.expected.fill(expected);
+}
+
+export const runAll = (page: Page) =>
+  page.getByRole('button', { name: 'Uruchom wszystkie' }).click();

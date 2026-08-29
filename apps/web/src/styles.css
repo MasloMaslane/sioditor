@@ -306,3 +306,177 @@ textarea,
     max-height: 140px;
   }
 }
+
+.tests {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.tests-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+.tests-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.tests-actions button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.tests-empty,
+.case-hint {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.paste-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.paste-box textarea {
+  min-height: 120px;
+}
+
+.case-list {
+  margin: 0;
+  padding: 0 12px 12px;
+  list-style: none;
+}
+
+.case {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.case-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+}
+
+.case-index {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.case-metrics {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+}
+
+.chip.good {
+  color: #7fdca4;
+  border-color: #2f6b48;
+}
+
+.chip.warn {
+  color: #e8c46a;
+  border-color: #6b5a2f;
+}
+
+.chip.bad {
+  color: var(--error);
+  border-color: #6b3232;
+}
+
+.case-remove {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+}
+
+.case-remove:hover {
+  color: var(--error);
+}
+
+.case-grid {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.case-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.case-grid span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.case-grid textarea {
+  min-height: 54px;
+  flex: none;
+}
+
+.case-grid pre {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.case-grid pre.bad {
+  border-color: #6b3232;
+}
+
+.build {
+  flex: none;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.build pre {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+@media (min-width: 1100px) {
+  .case-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .case-grid label:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}

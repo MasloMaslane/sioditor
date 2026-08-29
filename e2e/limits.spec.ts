@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { prepareCpp, setSource } from './helpers.js';
+import { prepareCpp, runAll, setSource, testCase } from './helpers.js';
 
 /**
  * Runtime measurement and limits, against real compiled programs.
@@ -14,7 +14,7 @@ test.describe('run limits and measurement', () => {
   const prepare = async (page: import('@playwright/test').Page, source: string) => {
     await prepareCpp(page);
     await setSource(page, source);
-    await page.getByRole('button', { name: 'Uruchom' }).click();
+    await runAll(page);
   };
 
   test('reports memory that reflects what the program actually allocated', async ({ page }) => {
@@ -36,10 +36,10 @@ test.describe('run limits and measurement', () => {
         '}',
       ].join('\n'),
     );
-    await expect(page.locator('.status')).toContainText('zakonczono', { timeout: 300_000 });
+    await expect(testCase(page).root).toContainText('MB', { timeout: 300_000 });
 
-    const status = (await page.locator('.status').textContent()) ?? '';
-    const mb = Number(/pamiec ([\d.]+) MB/.exec(status)?.[1] ?? '0');
+    const metrics = (await testCase(page).root.locator('.case-metrics').textContent()) ?? '';
+    const mb = Number(/([\d.]+) MB/.exec(metrics)?.[1] ?? '0');
     // 80 MB allocated, so anything near the old constant 16 MB means the sampling is
     // reading the wrong memory again.
     expect(mb).toBeGreaterThan(70);
@@ -62,7 +62,7 @@ test.describe('run limits and measurement', () => {
         'int main(){ printf("%lld\\n", f(10000000)); }',
       ].join('\n'),
     );
-    await expect(page.locator('.console pre')).toContainText('rekursji', { timeout: 300_000 });
-    await expect(page.locator('.status')).toContainText('przepelnienie stosu');
+    await expect(testCase(page).output).toContainText('rekursji', { timeout: 300_000 });
+    await expect(testCase(page).chip).toHaveText('przepelnienie stosu');
   });
 });
