@@ -22,14 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check the patch series applies to pinned LLVM
-        run: |
-          source toolchain/versions.env
-          # Only the files the series touches are needed, so fetch a sparse tree rather
-          # than the whole ~180k-file checkout.
-          git clone --depth 1 --branch "$LLVM_TAG" --filter=blob:none --sparse \
-            https://github.com/llvm/llvm-project.git /tmp/llvm
-          git -C /tmp/llvm sparse-checkout set llvm/lib/Support
-          git -C /tmp/llvm apply --check --verbose toolchain/patches/*.patch
+        run: ./toolchain/check-patches.sh /tmp/llvm
 
       - name: Fetch wasi-sdk
         run: |
