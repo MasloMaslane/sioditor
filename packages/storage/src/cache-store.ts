@@ -72,6 +72,15 @@ export class CacheAssetStore {
         // Tee so we can count bytes without buffering the body twice: one branch feeds
         // the cache, the other drives the progress bar.
         const [toCache, toCount] = response.body!.tee();
+
+        // Copying the response headers verbatim is wrong and fails in a way that is hard
+        // to trace: `response.body` is already decoded, so a stored Content-Encoding of
+        // gzip or br describes bytes that are no longer encoded. cache.match() still
+        // finds such an entry - so availability checks pass - and only decoding it later
+        // fails. Content-Length is stale for the same reason.
+        const headers = new Headers();
+        const contentType = response.headers.get('content-type');
+        if (contentType) headers.set('content-type', contentType);
         const counting = (async () => {
           const reader = toCount.getReader();
           for (;;) {
@@ -82,7 +91,7 @@ export class CacheAssetStore {
           }
         })();
 
-        await cache.put(url, new Response(toCache, { headers: response.headers }));
+        await cache.put(url, new Response(toCache, { headers }));
         await counting;
       }
       report('ready');

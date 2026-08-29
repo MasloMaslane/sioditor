@@ -100,4 +100,31 @@ test.describe('python runtime', () => {
     await page.getByRole('button', { name: 'Uruchom' }).click();
     await expect(page.locator('.status')).not.toBeEmpty();
   });
+
+  test('cached pack entries carry no stale Content-Encoding', async ({ page }) => {
+    // Regression guard with teeth. The dev/preview server gzips pyodide.mjs, and storing
+    // the response headers verbatim alongside an already-decoded body produced a cache
+    // entry claiming gzip over plain bytes. cache.match() still found it - so the pack
+    // reported ready - and only the later decode failed, which made the app work online,
+    // work locally off the HTTP cache, and fail offline in CI.
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Pobierz teraz' }).click();
+    await expect(page.getByText(/gotowy - dziala bez internetu/)).toBeVisible();
+
+    const offenders = await page.evaluate(async () => {
+      const found: string[] = [];
+      for (const name of await caches.keys()) {
+        if (!name.startsWith('sioditor-pack-')) continue;
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) {
+          const response = await cache.match(request);
+          const encoding = response?.headers.get('content-encoding');
+          if (encoding) found.push(`${request.url} -> ${encoding}`);
+        }
+      }
+      return found;
+    });
+
+    expect(offenders).toEqual([]);
+  });
 });
