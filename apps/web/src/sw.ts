@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching';
+import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -10,6 +11,16 @@ declare const self: ServiceWorkerGlobalScope & {
 // megabytes here would make first install fragile and re-download everything whenever
 // a single asset hash changed.
 precacheAndRoute(self.__WB_MANIFEST);
+
+/**
+ * Serve the app shell for any navigation, whatever the query string.
+ *
+ * Precaching alone matches the exact URL, so "/" worked offline and "/?session=round1"
+ * did not - which is precisely the shape of a supervised-round link. Without this, a
+ * contestant whose network drops during a round cannot reload the page they are sitting
+ * on.
+ */
+registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')));
 
 const PACK_PREFIXES = ['/pyodide/', '/toolchain/'];
 

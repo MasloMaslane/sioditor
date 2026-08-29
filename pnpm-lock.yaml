@@ -28,13 +28,16 @@ importers:
         version: 8.68.0(eslint@9.39.5)(typescript@5.9.3)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.9(terser@5.51.2)
+        version: 2.1.9(@types/node@22.20.1)(terser@5.51.2)
 
   apps/web:
     dependencies:
       '@sioditor/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@sioditor/integrity':
+        specifier: workspace:*
+        version: link:../../packages/integrity
       '@sioditor/runner':
         specifier: workspace:*
         version: link:../../packages/runner
@@ -62,14 +65,17 @@ importers:
         version: 19.2.5(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@6.4.3(terser@5.51.2))
+        version: 4.7.0(vite@6.4.3(@types/node@22.20.1)(terser@5.51.2))
       vite:
         specifier: ^6.0.5
-        version: 6.4.3(terser@5.51.2)
+        version: 6.4.3(@types/node@22.20.1)(terser@5.51.2)
       vite-plugin-pwa:
         specifier: ^0.21.1
-        version: 0.21.2(vite@6.4.3(terser@5.51.2))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1)
+        version: 0.21.2(vite@6.4.3(@types/node@22.20.1)(terser@5.51.2))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1)
       workbox-precaching:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-routing:
         specifier: ^7.4.1
         version: 7.4.1
 
@@ -99,6 +105,16 @@ importers:
       '@codemirror/view':
         specifier: ^6.36.1
         version: 6.43.9
+
+  packages/integrity:
+    dependencies:
+      idb:
+        specifier: ^8.0.0
+        version: 8.0.3
+    devDependencies:
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
 
   packages/runner:
     dependencies:
@@ -139,6 +155,16 @@ importers:
       '@sioditor/storage':
         specifier: workspace:*
         version: link:../storage
+
+  server:
+    dependencies:
+      '@sioditor/integrity':
+        specifier: workspace:*
+        version: link:../packages/integrity
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
 
 packages:
 
@@ -1293,6 +1319,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/node@22.20.1':
+    resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
   '@types/react-dom@19.2.5':
     resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
@@ -2528,6 +2557,9 @@ packages:
   unbox-primitive@1.1.0:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   unicode-canonical-property-names-ecmascript@2.0.1:
     resolution: {integrity: sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==}
@@ -3937,6 +3969,10 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node@22.20.1':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/react-dom@19.2.5(@types/react@19.2.18)':
     dependencies:
       '@types/react': 19.2.18
@@ -4040,7 +4076,7 @@ snapshots:
       '@typescript-eslint/types': 8.68.0
       eslint-visitor-keys: 5.0.1
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(terser@5.51.2))':
+  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.20.1)(terser@5.51.2))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -4048,7 +4084,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.3(terser@5.51.2)
+      vite: 6.4.3(@types/node@22.20.1)(terser@5.51.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -4059,13 +4095,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 1.2.0
 
-  '@vitest/mocker@2.1.9(vite@5.4.21(terser@5.51.2))':
+  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.20.1)(terser@5.51.2))':
     dependencies:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.21(terser@5.51.2)
+      vite: 5.4.21(@types/node@22.20.1)(terser@5.51.2)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -5379,6 +5415,8 @@ snapshots:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
 
+  undici-types@6.21.0: {}
+
   unicode-canonical-property-names-ecmascript@2.0.1: {}
 
   unicode-match-property-ecmascript@2.0.0:
@@ -5408,13 +5446,13 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite-node@2.1.9(terser@5.51.2):
+  vite-node@2.1.9(@types/node@22.20.1)(terser@5.51.2):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 1.1.2
-      vite: 5.4.21(terser@5.51.2)
+      vite: 5.4.21(@types/node@22.20.1)(terser@5.51.2)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -5426,27 +5464,28 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-pwa@0.21.2(vite@6.4.3(terser@5.51.2))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1):
+  vite-plugin-pwa@0.21.2(vite@6.4.3(@types/node@22.20.1)(terser@5.51.2))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1):
     dependencies:
       debug: 4.4.3
       pretty-bytes: 6.1.1
       tinyglobby: 0.2.17
-      vite: 6.4.3(terser@5.51.2)
+      vite: 6.4.3(@types/node@22.20.1)(terser@5.51.2)
       workbox-build: 7.4.1(@types/babel__core@7.20.5)
       workbox-window: 7.4.1
     transitivePeerDependencies:
       - supports-color
 
-  vite@5.4.21(terser@5.51.2):
+  vite@5.4.21(@types/node@22.20.1)(terser@5.51.2):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.26
       rollup: 4.63.1
     optionalDependencies:
+      '@types/node': 22.20.1
       fsevents: 2.3.3
       terser: 5.51.2
 
-  vite@6.4.3(terser@5.51.2):
+  vite@6.4.3(@types/node@22.20.1)(terser@5.51.2):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.7)
@@ -5455,13 +5494,14 @@ snapshots:
       rollup: 4.63.1
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 22.20.1
       fsevents: 2.3.3
       terser: 5.51.2
 
-  vitest@2.1.9(terser@5.51.2):
+  vitest@2.1.9(@types/node@22.20.1)(terser@5.51.2):
     dependencies:
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@5.4.21(terser@5.51.2))
+      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.20.1)(terser@5.51.2))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -5477,9 +5517,11 @@ snapshots:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 5.4.21(terser@5.51.2)
-      vite-node: 2.1.9(terser@5.51.2)
+      vite: 5.4.21(@types/node@22.20.1)(terser@5.51.2)
+      vite-node: 2.1.9(@types/node@22.20.1)(terser@5.51.2)
       why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 22.20.1
     transitivePeerDependencies:
       - less
       - lightningcss

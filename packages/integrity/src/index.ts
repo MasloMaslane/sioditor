@@ -1,0 +1,10 @@
+export type { IntegrityEvent } from './events.js';
+export { PASTE_TEXT_THRESHOLD, HEARTBEAT_MS } from './events.js';
+export type { SessionChunk, ChainVerdict } from './chain.js';
+export { sealChunk, verifyChain, hashText } from './chain.js';
+export { ChunkQueue } from './queue.js';
+export type { Transport, ChunkStore, SyncOptions, SyncState } from './sync.js';
+export { SyncLoop } from './sync.js';
+export type { RecorderOptions } from './recorder.js';
+export { Recorder } from './recorder.js';
+export { HttpTransport } from './http-transport.js';

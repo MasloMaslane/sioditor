@@ -127,17 +127,65 @@ management, technical documentation, human-oversight design, logging, and confor
 assessment before deployment. That is the single largest architectural constraint here,
 and it argues for simple thresholds a contestant can read.
 
-**GDPR.** Keystroke timing is behavioural biometric data. Whether it is Article 9 special
-category is genuinely contested in the literature, because it is used for anomaly
-flagging rather than unique identification. The safe posture is to treat it as if it were:
-explicit prior consent, a plain-language notice listing every signal, minimal retention,
-and a DPIA before any real deployment. Contestants are frequently minors, which raises the
-bar on consent rather than lowering it.
+**GDPR - and consent is the wrong instrument here.** For an official round, do _not_
+build this on consent. Consent must be freely given, and it is not freely given when
+refusing means not competing; a regulator would treat it as invalid, and it would leave
+the whole recording without a lawful basis. The basis belongs in the **contest
+regulations** accepted at registration.
+
+What is required instead:
+
+- **A transparency notice** before recording starts, listing every signal. Mandatory
+  whatever the basis. Implemented as `InvigilationNotice`, and it has to be kept in step
+  with what the recorder actually emits.
+- **A DPIA.** Systematic monitoring of individuals, and minors involved, so almost
+  certainly required.
+- **Information for guardians**, since school-age contestants cannot meaningfully consent
+  and the basis does not rest on them doing so.
+
+Keystroke timing would be behavioural biometric data; whether it is Article 9 special
+category is contested, because it is used for anomaly flagging rather than identification.
+That question is currently moot - no timing analysis is recorded beyond the edit log's own
+timestamps.
 
 **Human in the loop, always.** Flags order a review queue. No automated verdict, no
 automated accusation, no score shown to anyone that looks like a probability of guilt.
 
-## Proposed shape
+## What is built
+
+Phases 0 to 2 are implemented, for official rounds.
+
+- `packages/integrity` - the recorder, the hash-chained queue, and delivery.
+- `server/` - ingest and review, append-only JSON lines, no dependencies.
+- `InvigilationNotice` - shown before anything is captured; the editor is unreachable
+  until it is acknowledged.
+- `InvigilationBadge` - a standing indicator, showing what has not yet reached the
+  organiser.
+
+Recording happens only when the page is opened with a session link
+(`?session=...&participant=...`). Ordinary practice use records nothing and contacts no
+server, which is asserted by a test rather than merely intended.
+
+### Surviving a bad network
+
+The requirement that shaped the design: **no recorded event may be lost to the network.**
+
+- Every chunk is written to IndexedDB before any attempt to send it, and marked delivered
+  only on acknowledgement.
+- Retries back off exponentially to a one-minute ceiling, rather than hammering a server
+  that is down.
+- Ingest is idempotent by sequence number, because a lost acknowledgement means the client
+  will send the same chunk again - and it must be accepted, not rejected or duplicated.
+- `sendBeacon` on page hide catches what a closing tab would otherwise strand; it returns
+  no acknowledgement, so those chunks stay pending and are re-sent, which is safe for the
+  same reason.
+- A reload continues the chain rather than starting a new one.
+
+Covered by tests at both levels: unit tests for a dead server, a partial acknowledgement,
+a lost acknowledgement, and backoff; end-to-end tests that take the server away mid-round
+and take the network away mid-round, and check afterwards that the chain still verifies.
+
+## Original phasing
 
 ### Phase 0 - agree the rules (no code)
 

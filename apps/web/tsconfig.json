@@ -12,6 +12,7 @@
     { "path": "../../packages/editor" },
     { "path": "../../packages/runner" },
     { "path": "../../packages/toolchain-cpp" },
-    { "path": "../../packages/runtime-python" }
+    { "path": "../../packages/runtime-python" },
+    { "path": "../../packages/integrity" }
   ]
 }

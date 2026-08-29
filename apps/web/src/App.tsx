@@ -11,6 +11,9 @@ import { usePack } from './usePack.js';
 import { StoragePanel } from './StoragePanel.js';
 import { useStorage } from './useStorage.js';
 import { useRun } from './useRun.js';
+import { InvigilationBadge } from './InvigilationBadge.js';
+import { InvigilationNotice } from './InvigilationNotice.js';
+import { useInvigilation } from './useInvigilation.js';
 import { STARTERS, useWorkspace } from './useWorkspace.js';
 
 const packs = new PackManager();
@@ -21,6 +24,7 @@ export function App() {
   const language: Language = current?.language ?? 'python';
   const runner = useRun();
   const storage = useStorage(packs);
+  const invigilation = useInvigilation();
   const [storageOpen, setStorageOpen] = useState(false);
 
   const pythonPack = usePack(packs, getPack('python'));
@@ -54,6 +58,13 @@ export function App() {
 
   const cases = current ? testsOf(current) : [];
 
+  // Seeded when a problem is opened; the recorder keeps it current from the edits it
+  // sees, so that paste novelty is judged before the edit lands rather than after.
+  useEffect(() => {
+    if (current) invigilation.noteDocument(current.id, current.source);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id]);
+
   const switchLanguage = useCallback(
     (next: Language) => {
       if (!current || current.language === next) return;
@@ -69,8 +80,21 @@ export function App() {
     if (!activePack.ready) {
       return;
     }
+    invigilation.record({
+      t: 'run',
+      at: Date.now(),
+      problemId: current.id,
+      language: current.language,
+      outcome: 'started',
+    });
     void runner.run(current, cases, pchPack.ready);
-  }, [activePack.ready, cases, current, pchPack.ready, runner]);
+  }, [activePack.ready, cases, current, invigilation, pchPack.ready, runner]);
+
+  if (invigilation.awaitingAcknowledgement && invigilation.session) {
+    return (
+      <InvigilationNotice session={invigilation.session} onAcknowledge={invigilation.acknowledge} />
+    );
+  }
 
   if (!workspace.loaded) {
     return <div className="app loading">Wczytywanie...</div>;
@@ -80,6 +104,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <span className="brand">sioditor</span>
+        <InvigilationBadge invigilation={invigilation} />
         <div className="langs">
           {(['python', 'cpp'] as const).map((lang) => (
             <button
@@ -123,6 +148,9 @@ export function App() {
           doc={current?.source ?? ''}
           language={language}
           onChange={(next) => workspace.update({ source: next })}
+          onEdit={(edit) => {
+            if (current) invigilation.recordEdit(current.id, edit);
+          }}
           onRun={onRun}
         />
 

@@ -1,0 +1,18 @@
+{
+  "name": "@sioditor/integrity",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Session recording for supervised contests: capture, queue, and resilient delivery",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5"
+  }
+}
