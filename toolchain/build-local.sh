@@ -50,7 +50,16 @@ echo "==> stage B: cross-building clang + lld to wasm32-wasip1"
 echo "==> packing the sysroot"
 mkdir -p "$here/out"
 node "$here/ci/pack-sysroot.mjs" "$WASI_SDK/share/wasi-sysroot" "$here/out"
-cp "$here/build/wasm/bin/llvm.wasm" "$here/out/"
+cp "$here/build/wasm/bin/clang.wasm-23" "$here/out/clang.wasm"
+cp "$here/build/wasm/bin/lld.wasm" "$here/out/"
+
+# Optional, and only if wasmtime is around to run the compiler with.
+if command -v wasmtime >/dev/null; then
+  echo "==> building the precompiled header"
+  "$here/ci/build-pch.sh" "$here/out/sysroot.bin" "$here/out/stdcpp.pch"
+else
+  echo "==> skipping the precompiled header (wasmtime not installed)"
+fi
 
 echo
 echo "==> artifacts"

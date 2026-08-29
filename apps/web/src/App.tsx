@@ -25,6 +25,7 @@ export function App() {
   const pythonPack = usePack(packs, getPack('python'));
   const numpyPack = usePack(packs, getPack('numpy'));
   const cppPack = usePack(packs, getPack('cpp'));
+  const pchPack = usePack(packs, getPack('cpp-pch'));
   const activePack = language === 'cpp' ? cppPack : pythonPack;
 
   useEffect(() => {
@@ -54,8 +55,8 @@ export function App() {
     if (!activePack.ready) {
       return;
     }
-    void runner.run(current, cases);
-  }, [activePack.ready, cases, current, runner]);
+    void runner.run(current, cases, pchPack.ready);
+  }, [activePack.ready, cases, current, pchPack.ready, runner]);
 
   if (!workspace.loaded) {
     return <div className="app loading">Wczytywanie...</div>;
@@ -136,6 +137,7 @@ export function App() {
             pythonPack.recheck();
             cppPack.recheck();
             numpyPack.recheck();
+            pchPack.recheck();
           }}
         />
       )}

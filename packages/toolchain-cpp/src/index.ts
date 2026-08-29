@@ -5,6 +5,8 @@ export {
   SYSROOT,
   USER_STACK_BYTES,
   compileArgs,
+  usesAggregateHeader,
+  PCH_PATH,
   linkArgs,
 } from './flags.js';
 export type { Diagnostic } from './diagnostics.js';

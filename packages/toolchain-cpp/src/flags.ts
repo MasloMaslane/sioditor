@@ -39,7 +39,26 @@ export interface CompileFlagOptions {
   readonly memoryLimitBytes: number;
 }
 
-export function compileArgs(input: string, output: string): string[] {
+/** Where the precompiled header is mounted, when one is available. */
+export const PCH_PATH = `${SYSROOT}/stdcpp.pch`;
+
+/**
+ * True when a precompiled <bits/stdc++.h> would apply to this source.
+ *
+ * The PCH is only used for sources that actually include the aggregate header. Forcing it
+ * on everything would be faster still, but it would also declare the whole standard
+ * library for code that carefully included only what it needs - hiding a missing include
+ * here that the judge would reject.
+ */
+export function usesAggregateHeader(source: string): boolean {
+  return /^\s*#\s*include\s*<bits\/stdc\+\+\.h>/m.test(source);
+}
+
+export function compileArgs(
+  input: string,
+  output: string,
+  options: { pch?: boolean } = {},
+): string[] {
   return [
     '-cc1',
     '-triple',
@@ -61,6 +80,9 @@ export function compileArgs(input: string, output: string): string[] {
     `${SYSROOT}/include/clang`,
     '-internal-isystem',
     `${SYSROOT}/include`,
+    // The VFS has synthetic timestamps, so clang's default staleness check on the PCH's
+    // input files would reject it every time.
+    ...(options.pch ? ['-fno-validate-pch', '-include-pch', PCH_PATH] : []),
     '-o',
     output,
     '-x',

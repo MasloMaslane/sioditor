@@ -27,7 +27,7 @@ export interface RunState {
   readonly status: string;
   readonly results: ReadonlyMap<string, CaseResult>;
   readonly buildOutput: string;
-  readonly run: (problem: Problem, cases: readonly TestCase[]) => Promise<void>;
+  readonly run: (problem: Problem, cases: readonly TestCase[], usePch?: boolean) => Promise<void>;
   readonly stop: () => void;
   readonly clear: () => void;
 }
@@ -48,6 +48,7 @@ export function useRun(): RunState {
 
   const python = useRef<PythonRuntime>(null);
   const toolchain = useRef<CppToolchain>(null);
+  const pchLoaded = useRef<boolean>(false);
   const abort = useRef<AbortController>(null);
 
   const clear = useCallback(() => {
@@ -61,8 +62,17 @@ export function useRun(): RunState {
   }, []);
 
   const runCpp = useCallback(
-    async (problem: Problem, cases: readonly TestCase[], signal: AbortSignal) => {
-      toolchain.current ??= new CppToolchain(getPack('cpp').baseUrl);
+    async (problem: Problem, cases: readonly TestCase[], signal: AbortSignal, usePch: boolean) => {
+      // The worker loads the PCH once at startup, so installing the pack later has to
+      // rebuild it - otherwise the speedup only appears after a page reload.
+      if (toolchain.current && pchLoaded.current !== usePch) {
+        toolchain.current.dispose();
+        toolchain.current = null;
+      }
+      if (!toolchain.current) {
+        toolchain.current = new CppToolchain(getPack('cpp').baseUrl, usePch);
+        pchLoaded.current = usePch;
+      }
       setStatus('kompilowanie...');
 
       const build = await toolchain.current.build({
@@ -145,7 +155,7 @@ export function useRun(): RunState {
   );
 
   const run = useCallback(
-    async (problem: Problem, cases: readonly TestCase[]) => {
+    async (problem: Problem, cases: readonly TestCase[], usePch = false) => {
       if (cases.length === 0) {
         setStatus('dodaj przynajmniej jeden test');
         return;
@@ -158,7 +168,7 @@ export function useRun(): RunState {
 
       try {
         const language: Language = problem.language;
-        if (language === 'cpp') await runCpp(problem, cases, controller.signal);
+        if (language === 'cpp') await runCpp(problem, cases, controller.signal, usePch);
         else await runPython(problem, cases, controller.signal);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);

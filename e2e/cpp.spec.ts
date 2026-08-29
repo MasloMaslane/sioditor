@@ -87,4 +87,57 @@ test.describe('c++ toolchain', () => {
     await expect(testCase(page).output).toContainText('2 3');
     await expect(testCase(page).output).toContainText('4 20');
   });
+
+  test('still compiles and runs with the network gone', async ({ page, context }) => {
+    // This was broken and untested: the C++ pack was stored in OPFS, but the worker loads
+    // clang with compileStreaming and fetches the sysroot by URL, and only Cache Storage
+    // is replayed by the service worker. Going offline produced "Failed to fetch".
+    await prepareCpp(page);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.locator('[data-pack="cpp"]')).toContainText('gotowy');
+
+    await runAll(page);
+    await expect(testCase(page).output).toHaveText(/^10\s*$/, { timeout: 300_000 });
+  });
+
+  test('the precompiled header makes compiling several times faster', async ({ page }) => {
+    const source = [
+      '#include <bits/stdc++.h>',
+      'using namespace std;',
+      'int main(){ vector<long long> a{3,1,2}; sort(a.begin(), a.end());',
+      '  map<long long,int> f; for (auto x : a) f[x]++;',
+      '  cout << accumulate(a.begin(), a.end(), 0LL) << " " << f.size() << "\\n"; }',
+    ].join('\n');
+
+    const compileMs = async () => {
+      await runAll(page);
+      await page.waitForFunction(
+        () => /kompilacja \d+ ms/.test(document.querySelector('.build .status')?.textContent ?? ''),
+        undefined,
+        { timeout: 300_000 },
+      );
+      const text = await page.locator('.build .status').textContent();
+      return Number(/kompilacja (\d+) ms/.exec(text ?? '')?.[1] ?? '0');
+    };
+
+    await prepareCpp(page);
+    await setSource(page, source);
+    await compileMs(); // warm the wasm code cache before measuring
+    const without = await compileMs();
+
+    await page.getByRole('button', { name: 'Pakiety' }).click();
+    const pch = page.locator('.pack-list li').filter({ hasText: 'szybka kompilacja' });
+    await pch.getByRole('button', { name: 'Pobierz' }).click();
+    await expect(pch.locator('.chip')).toHaveText('gotowy', { timeout: 300_000 });
+    await page.locator('.modal header button').click();
+
+    await compileMs();
+    const withPch = await compileMs();
+
+    // Measured at about 2100 ms against 420 ms; half is a floor that leaves room for a
+    // slow machine without letting a silent regression through.
+    expect(withPch).toBeLessThan(without / 2);
+  });
 });

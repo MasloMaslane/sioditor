@@ -15,8 +15,8 @@ test.describe('storage panel', () => {
 
   test('lists every pack with its size and state', async ({ page }) => {
     await open(page);
-    // Python, NumPy and C++.
-    await expect(page.locator('.pack-list li')).toHaveCount(3);
+    // Python, NumPy, C++ and the precompiled header.
+    await expect(page.locator('.pack-list li')).toHaveCount(4);
     await expect(page.locator('.modal')).toContainText('Python 3.13');
     await expect(page.locator('.modal')).toContainText('NumPy');
     await expect(page.locator('.modal')).toContainText('MB');

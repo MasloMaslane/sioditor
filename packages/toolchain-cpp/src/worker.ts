@@ -8,7 +8,7 @@ import {
   PreopenDirectory,
 } from '@bjorn3/browser_wasi_shim';
 import { parseSysroot } from './sysroot.js';
-import { compileArgs, linkArgs } from './flags.js';
+import { compileArgs, linkArgs, usesAggregateHeader } from './flags.js';
 import { parseDiagnostics, hasErrors } from './diagnostics.js';
 import { checkPortability } from './portability.js';
 import type { BuildRequest, CompilerMessage, CompilerRequest } from './protocol.js';
@@ -18,6 +18,7 @@ const post = (message: CompilerMessage) => self.postMessage(message);
 let clangModule: WebAssembly.Module | undefined;
 let lldModule: WebAssembly.Module | undefined;
 let sysrootRoot: Directory | undefined;
+let hasPch = false;
 
 /**
  * Fetches and compiles a tool.
@@ -69,7 +70,7 @@ async function run(
   }
 }
 
-async function init(baseUrl: string): Promise<void> {
+async function init(baseUrl: string, usePch: boolean): Promise<void> {
   const [clang, lld, sysrootResponse] = await Promise.all([
     loadModule(`${baseUrl}/clang.wasm`),
     loadModule(`${baseUrl}/lld.wasm`),
@@ -84,6 +85,20 @@ async function init(baseUrl: string): Promise<void> {
   const image = new Uint8Array(await sysrootResponse.arrayBuffer());
   const parsed = parseSysroot(image);
   sysrootRoot = parsed.root;
+
+  // Optional and shipped separately, so a missing one is a slower compile, not a failure.
+  if (usePch)
+    try {
+      const pch = await fetch(`${baseUrl}/stdcpp.pch`);
+      const type = pch.headers.get('content-type') ?? '';
+      if (pch.ok && !type.includes('text/html')) {
+        const bytes = new Uint8Array(await pch.arrayBuffer());
+        sysrootRoot.contents.set('stdcpp.pch', new File(bytes));
+        hasPch = true;
+      }
+    } catch {
+      hasPch = false;
+    }
 
   let version = '';
   const versionWork = new Directory(new Map());
@@ -117,7 +132,12 @@ async function build(request: BuildRequest): Promise<void> {
   const compileStart = performance.now();
   const compileStatus = await run(
     clangModule,
-    ['clang', ...compileArgs('/work/main.cpp', '/work/main.o')],
+    [
+      'clang',
+      ...compileArgs('/work/main.cpp', '/work/main.o', {
+        pch: hasPch && usesAggregateHeader(source),
+      }),
+    ],
     work,
     collect,
   );
@@ -173,7 +193,7 @@ async function build(request: BuildRequest): Promise<void> {
 
 self.onmessage = (event: MessageEvent<CompilerRequest>) => {
   const request = event.data;
-  const handler = request.kind === 'init' ? init(request.baseUrl) : build(request);
+  const handler = request.kind === 'init' ? init(request.baseUrl, request.usePch) : build(request);
   handler.catch((cause: unknown) => {
     post({ kind: 'failed', error: cause instanceof Error ? cause.message : String(cause) });
   });

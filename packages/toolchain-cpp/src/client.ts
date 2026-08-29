@@ -33,7 +33,10 @@ export class CppToolchain {
   private readyPromise: Promise<{ clangVersion: string; sysrootFiles: number }> | undefined;
   private nextBuildId = 0;
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly usePch = false,
+  ) {}
 
   ready(): Promise<{ clangVersion: string; sysrootFiles: number }> {
     this.readyPromise ??= this.boot();
@@ -60,7 +63,11 @@ export class CppToolchain {
         reject(new Error(`compiler worker failed to start: ${event.message || 'unknown'}`));
       });
 
-      const request: CompilerRequest = { kind: 'init', baseUrl: this.baseUrl };
+      const request: CompilerRequest = {
+        kind: 'init',
+        baseUrl: this.baseUrl,
+        usePch: this.usePch,
+      };
       worker.postMessage(request);
     });
   }

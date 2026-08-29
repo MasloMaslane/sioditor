@@ -129,9 +129,32 @@ Wired up and verified in Chrome, not just under wasmtime. A first visit fetches
 `clang.wasm`, `lld.wasm` and `sysroot.bin` into Cache Storage; after that the toolchain
 works with the network off, like the Python one.
 
-Measured in-browser on an M-series Mac: compile plus link of the sample is about 2.6 s and
-the program then runs in single-digit milliseconds. The compile figure is dominated by
-parsing `<bits/stdc++.h>` from scratch, which is what a precompiled header would remove.
+Measured in-browser on an M-series Mac: compile plus link is about 2.1 s without the
+precompiled header and about 0.42 s with it, and the program then runs in single-digit
+milliseconds.
+
+### The precompiled header
+
+Most of a `<bits/stdc++.h>` compile is parsing the aggregate header, so precompiling it is
+the single largest lever available. Measured in Chrome: **2089 ms to 423 ms, a 4.9x
+speedup**.
+
+It costs 33 MB raw and 14.5 MB brotli, which is a 66% increase on the C++ download, so it
+ships as its own optional pack rather than being forced on everyone. Someone arming the
+tool before a round will want it; someone on a tethered phone mid-contest may not.
+
+`toolchain/ci/build-pch.sh` builds it with the wasm clang itself, against the packed
+sysroot expanded at `/sysroot` - the same path the browser mounts. Both matter: a PCH is
+tied to the compiler revision and language options that produced it, and it records the
+path of every header it consumed, so a different layout makes it silently unusable. The
+flag list in that script has to match `flags.ts`.
+
+Two details in how it is used. It is applied only to sources that actually include
+`<bits/stdc++.h>`: forcing it on everything would be faster still, but would declare the
+whole standard library for code that carefully included only what it needed, hiding a
+missing include that the judge would reject. And it is loaded with `-fno-validate-pch`,
+because the virtual filesystem has synthetic timestamps and clang's staleness check would
+otherwise reject it on every compile.
 
 The compiler worker keeps clang and lld loaded between builds - re-fetching ninety
 megabytes per build would be absurd - but creates a fresh `WebAssembly.Instance` for each

@@ -16,10 +16,14 @@ export interface AssetPackFile {
 /**
  * Where a pack's bytes live once fetched.
  *
- * `opfs` is the default and the better store: random access, no structured-clone tax,
- * far faster large writes. But it is only usable when *we* do the reading. Pyodide's
- * loader resolves its own siblings by URL and cannot be pointed at a file handle, so
- * those packs go to Cache Storage instead and the service worker replays them offline.
+ * `cache` is what every pack currently uses, because everything that consumes them does
+ * so by URL: Pyodide's loader resolves its own siblings, and the compiler worker uses
+ * WebAssembly.compileStreaming, which needs a real response to stream. Only Cache Storage
+ * is replayed by the service worker, so only Cache Storage survives going offline.
+ *
+ * `opfs` remains for a consumer that reads bytes itself and would benefit from random
+ * access without the structured-clone tax. Nothing does yet; putting a pack there today
+ * makes it invisible to the code that needs it.
  */
 export type PackStorage = 'opfs' | 'cache';
 
@@ -64,7 +68,13 @@ export const PACKS: readonly AssetPack[] = [
   {
     id: 'cpp',
     label: 'C++ (clang)',
-    storage: 'opfs',
+    // Cache Storage, not OPFS, and this is not a detail. The compiler worker loads
+    // clang.wasm with compileStreaming and fetches the sysroot by URL, and only Cache
+    // Storage is replayed by the service worker - a pack sitting in OPFS is invisible to
+    // a fetch, so C++ failed with "Failed to fetch" the moment the network went away.
+    // OPFS was chosen for random access into the sysroot, which never materialised: the
+    // image is parsed into memory in one go.
+    storage: 'cache',
     version: 'dev',
     baseUrl: '/toolchain/cpp/dev',
     optional: false,
@@ -74,6 +84,18 @@ export const PACKS: readonly AssetPack[] = [
       { name: 'lld.wasm', bytes: 34_789_480 },
       { name: 'sysroot.bin', bytes: 22_755_492 },
     ],
+  },
+  {
+    id: 'cpp-pch',
+    label: 'C++ - szybka kompilacja',
+    storage: 'cache',
+    version: 'dev',
+    baseUrl: '/toolchain/cpp/dev',
+    optional: true,
+    description:
+      'Prekompilowany <bits/stdc++.h>. Skraca kompilacje z okolo 2,1 s do 0,4 s. ' +
+      'Bez niego wszystko dziala, tylko wolniej.',
+    files: [{ name: 'stdcpp.pch', bytes: 35_282_076 }],
   },
   {
     id: 'python',

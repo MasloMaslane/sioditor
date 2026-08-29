@@ -12,6 +12,12 @@ export interface InitRequest {
   readonly kind: 'init';
   /** Same-origin directory holding clang.wasm, lld.wasm and sysroot.bin. */
   readonly baseUrl: string;
+  /**
+   * Whether the precompiled-header pack is installed. Checked by the caller rather than
+   * probed here: fetching it speculatively would pull 34 MB on every start for someone
+   * who chose not to install it.
+   */
+  readonly usePch: boolean;
 }
 
 export type CompilerRequest = InitRequest | BuildRequest;
