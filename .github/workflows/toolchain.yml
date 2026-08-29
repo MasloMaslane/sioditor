@@ -3,10 +3,9 @@ name: toolchain
 # Deliberate start only. This is a multi-hour build on a 4-vCPU runner, so it must never
 # fire on an ordinary push that touches a script or a doc under toolchain/.
 #
-# Two ways in: the Run workflow button, or pushing a tag named toolchain-build-*. The tag
-# exists because dispatching a workflow needs an actions:write token, which automation
-# here does not have - pushing a tag is the equivalent deliberate gesture and leaves a
-# record of exactly which commit was built.
+# Two ways in: the Run workflow button, or pushing a tag named toolchain-build-*, which
+# leaves a record of exactly which commit was built. Both require a human or a token with
+# actions:write and tag-push rights.
 on:
   workflow_dispatch:
   push:

@@ -171,9 +171,10 @@ Either press Run workflow on the `toolchain` workflow, or push a tag:
 git tag toolchain-build-$(date +%Y%m%d-%H%M) && git push origin --tags
 ```
 
-The tag route exists because dispatching a workflow requires an `actions:write` token,
-which the automation working on this repo does not have. Pushing a tag is the same
-deliberate gesture and additionally records which commit was built.
+The tag route records which commit was built, which is worth having for an artifact this
+expensive to produce. Note that both routes need a human or a token with `actions:write`
+and tag-push rights: the automation working on this repo has neither (both return 403),
+so it cannot start this build itself.
 
 Expect 3-5 hours on a 4-vCPU runner, against a 6-hour job cap. If it starts timing out,
 move to a larger runner rather than trimming the build.
