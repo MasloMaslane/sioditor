@@ -1,0 +1,42 @@
+name: toolchain-patches
+
+# Cheap guard, separate from the multi-hour build: confirms the WASI patch series still
+# applies to the pinned LLVM and that the compat layer still compiles and links. Patch
+# rot is otherwise only discovered hours into a build.
+on:
+  push:
+    paths:
+      - 'toolchain/patches/**'
+      - 'toolchain/wasi-compat/**'
+      - 'toolchain/versions.env'
+      - '.github/workflows/toolchain-patches.yml'
+  pull_request:
+    paths:
+      - 'toolchain/**'
+  workflow_dispatch:
+
+jobs:
+  patches-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the patch series applies to pinned LLVM
+        run: |
+          source toolchain/versions.env
+          # Only the files the series touches are needed, so fetch a sparse tree rather
+          # than the whole ~180k-file checkout.
+          git clone --depth 1 --branch "$LLVM_TAG" --filter=blob:none --sparse \
+            https://github.com/llvm/llvm-project.git /tmp/llvm
+          git -C /tmp/llvm sparse-checkout set llvm/lib/Support
+          git -C /tmp/llvm apply --check --verbose toolchain/patches/*.patch
+
+      - name: Fetch wasi-sdk
+        run: |
+          source toolchain/versions.env
+          curl -sSL -o /tmp/wasi-sdk.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION%%.*}/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux.tar.gz"
+          mkdir -p /opt/wasi-sdk && tar xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+
+      - name: Compat layer compiles, links, and fixes the real call patterns
+        run: ./toolchain/wasi-compat/verify.sh /opt/wasi-sdk

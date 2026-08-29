@@ -1,23 +1,17 @@
 name: toolchain
 
-# Expensive and rarely needed: run it by hand, or when the build inputs change.
+# Manual only. This is a multi-hour build on a 4-vCPU runner, so it must not fire on
+# every push that touches a script or a doc under toolchain/. Once the build is known to
+# pass end to end, a schedule or a narrow path trigger can be reconsidered.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'toolchain/**'
-      - '.github/workflows/toolchain.yml'
 
 jobs:
   host-tools:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          source toolchain/versions.env
-          git clone --depth 1 --branch "$LLVM_TAG" \
-            https://github.com/llvm/llvm-project.git toolchain/llvm-project
-          git -C toolchain/llvm-project apply ../patches/*.patch
+      - run: ./toolchain/fetch-llvm.sh
       - uses: hendrikmuhs/ccache-action@v1
         with: { key: llvm-host }
       - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
@@ -40,11 +34,7 @@ jobs:
         with: { tool-cache: true }
       - run: sudo apt-get update && sudo apt-get install -y ninja-build brotli
 
-      - run: |
-          source toolchain/versions.env
-          git clone --depth 1 --branch "$LLVM_TAG" \
-            https://github.com/llvm/llvm-project.git toolchain/llvm-project
-          git -C toolchain/llvm-project apply ../patches/*.patch
+      - run: ./toolchain/fetch-llvm.sh
 
       - name: Fetch wasi-sdk
         run: |

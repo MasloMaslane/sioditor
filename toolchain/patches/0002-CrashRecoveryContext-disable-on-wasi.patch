@@ -1,0 +1,78 @@
+diff --git a/llvm/lib/Support/CrashRecoveryContext.cpp b/llvm/lib/Support/CrashRecoveryContext.cpp
+index 493ba95..0ba9412 100644
+--- a/llvm/lib/Support/CrashRecoveryContext.cpp
++++ b/llvm/lib/Support/CrashRecoveryContext.cpp
+@@ -14,7 +14,12 @@
+ #include "llvm/Support/thread.h"
+ #include <cassert>
+ #include <mutex>
++#if !defined(__wasi__)
++// wasi-libc's <setjmp.h> is a hard #error unless the module is built with
++// -mllvm -wasm-enable-sjlj. Crash recovery is disabled on WASI (see below), so the
++// header is not needed at all.
+ #include <setjmp.h>
++#endif
+ #ifdef __APPLE__
+ #include <sys/resource.h>
+ #endif
+@@ -34,7 +39,9 @@ struct CrashRecoveryContextImpl {
+   const CrashRecoveryContextImpl *Next;
+ 
+   CrashRecoveryContext *CRC;
++#if !defined(__wasi__)
+   ::jmp_buf JumpBuffer;
++#endif
+   volatile unsigned Failed : 1;
+   unsigned SwitchedThread : 1;
+   unsigned ValidJumpBuffer : 1;
+@@ -76,8 +83,10 @@ public:
+     CRC->RetCode = RetCode;
+ 
+     // Jump back to the RunSafely we were called under.
++#if !defined(__wasi__)
+     if (ValidJumpBuffer)
+       longjmp(JumpBuffer, 1);
++#endif
+ 
+     // Otherwise let the caller decide of the outcome of the crash. Currently
+     // this occurs when using SEH on Windows with MSVC or clang-cl.
+@@ -335,6 +344,26 @@ static void uninstallExceptionOrSignalHandlers() {
+   }
+ }
+ 
++#elif defined(__wasi__)
++
++// WASI implementation: crash recovery is not available.
++//
++// The generic POSIX path below needs sigaction/sigprocmask/sigemptyset and setjmp.
++// wasi-libc declares the signal functions behind _WASI_EMULATED_SIGNAL but does not
++// define them - libwasi-emulated-signal.a contains only signal, raise, abort and
++// psignal - so that path compiles and then fails at link. setjmp is unavailable too.
++//
++// Disabling recovery means an internal compiler error becomes a trap that kills the
++// instance rather than a catchable failure. That is an acceptable trade for the browser
++// host, which creates a fresh instance per compile and reports the error to the user.
++// The alternative - building the entire module with -fwasm-exceptions and
++// -mllvm -wasm-enable-sjlj - would cost size and speed everywhere to service a path that
++// should never execute.
++
++static void
++installExceptionOrSignalHandlers(bool NeedsPOSIXUtilitySignalHandling) {}
++static void uninstallExceptionOrSignalHandlers() {}
++
+ #else // !_WIN32
+ 
+ // Generic POSIX implementation.
+@@ -431,10 +460,12 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+     CrashRecoveryContextImpl *CRCI = new CrashRecoveryContextImpl(this);
+     Impl = CRCI;
+ 
++#if !defined(__wasi__)
+     CRCI->ValidJumpBuffer = true;
+     if (setjmp(CRCI->JumpBuffer) != 0) {
+       return false;
+     }
++#endif
+   }
+ 
+   Fn();

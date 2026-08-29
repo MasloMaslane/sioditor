@@ -1,0 +1,71 @@
+diff --git a/llvm/lib/Support/Unix/Program.inc b/llvm/lib/Support/Unix/Program.inc
+index 489ca03..0e7e221 100644
+--- a/llvm/lib/Support/Unix/Program.inc
++++ b/llvm/lib/Support/Unix/Program.inc
+@@ -137,6 +137,11 @@ static bool RedirectIO_PS(const std::string *Path, int FD, std::string *ErrMsg,
+ static void TimeOutHandler(int Sig) {}
+ 
+ static void SetMemoryLimits(unsigned size) {
++#if defined(__wasi__)
++  // wasi-libc declares getrlimit/setrlimit but a WASI module has no process whose
++  // limits could be changed. The only caller is the fork path, which is gone below.
++  (void)size;
++#else
+   struct rlimit r;
+   __typeof__(r.rlim_cur) limit = (__typeof__(r.rlim_cur))(size)*1048576;
+ 
+@@ -150,6 +155,7 @@ static void SetMemoryLimits(unsigned size) {
+   r.rlim_cur = limit;
+   setrlimit(RLIMIT_RSS, &r);
+ #endif
++#endif // !__wasi__
+ }
+ 
+ static std::vector<const char *>
+@@ -170,6 +176,24 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
+   assert(!AffinityMask && "Starting a process with an affinity mask is "
+                           "currently not supported on Unix!");
+ 
++#if defined(__wasi__)
++  // WASI has no process creation at all: fork, vfork, execve and execv are gated out of
++  // wasi-libc's <unistd.h>, and there is no <spawn.h> or <sys/wait.h> in the sysroot.
++  //
++  // This does not stop clang from compiling. CLANG_SPAWN_CC1 defaults to OFF, so the
++  // driver runs cc1 in-process rather than spawning it. Only genuinely external tools
++  // reach this function, and the browser host drives the linker as a separate module
++  // invocation instead.
++  (void)Program;
++  (void)Args;
++  (void)Env;
++  (void)Redirects;
++  (void)MemoryLimit;
++  (void)DetachProcess;
++  PI.Pid = 0;
++  return !MakeErrMsg(ErrMsg, "cannot start a subprocess: WASI has no fork/exec", 0);
++#else
++
+   BumpPtrAllocator Allocator;
+   StringSaver Saver(Allocator);
+   std::vector<const char *> ArgVector, EnvVector;
+@@ -329,6 +353,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
+   PI.Process = child;
+ 
+   return true;
++#endif // !__wasi__
+ }
+ 
+ namespace llvm {
+@@ -336,6 +361,13 @@ namespace sys {
+ 
+ #if defined(_AIX)
+ static pid_t(wait4)(pid_t pid, int *status, int options, struct rusage *usage);
++#elif defined(__wasi__)
++// No child processes exist, so nothing can be waited for. Declared to keep Wait()
++// compiling; it is unreachable because Execute() always fails above.
++static pid_t(wait4)(pid_t pid, int *status, int options, struct rusage *usage) {
++  errno = ECHILD;
++  return -1;
++}
+ #elif !defined(__Fuchsia__)
+ using ::wait4;
+ #endif

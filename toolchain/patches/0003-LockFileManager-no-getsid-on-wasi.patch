@@ -1,0 +1,22 @@
+diff --git a/llvm/lib/Support/LockFileManager.cpp b/llvm/lib/Support/LockFileManager.cpp
+index 564cfc5..31b0ba4 100644
+--- a/llvm/lib/Support/LockFileManager.cpp
++++ b/llvm/lib/Support/LockFileManager.cpp
+@@ -119,7 +119,17 @@ bool LockFileManager::processStillExecuting(StringRef HostID, int PID) {
+     return true; // Conservatively assume it's executing on error.
+ 
+   // Check whether the process is dead. If so, we're done.
++#if defined(__wasi__)
++  // getsid is gated out of wasi-libc's <unistd.h>, so process liveness cannot be probed.
++  // A WASI module is a single process with no children, and the browser host builds a
++  // fresh instance per compile, so any lock file recorded by this host necessarily
++  // belongs to an instance that no longer exists. Reporting it as stale is both correct
++  // and the safe direction: the opposite answer would wedge the compile waiting for a
++  // process that can never finish.
++  if (StoredHostID == HostID)
++#else
+   if (StoredHostID == HostID && getsid(PID) == -1 && errno == ESRCH)
++#endif
+     return false;
+ #endif
+ 

@@ -1,37 +1,55 @@
 # LLVM patch series for wasm32-wasip1
 
-LLVM does not cross-compile to WASI unmodified. These are **compile** errors, not link
-errors, so they cannot be papered over with stub symbols — the declarations are absent.
+LLVM does not cross-compile to WASI unmodified. Everything here was established by
+**compile probes against wasi-sdk-34**, not by reading headers — reading them is actively
+misleading, because the declarations _are_ present in the files but sealed inside
+`#ifdef __wasilibc_unmodified_upstream`, which is never defined.
 
-Verified against the shipped `wasi-sysroot-34.0`:
+What wasi-sysroot-34.0 actually gives you:
 
-- `include/wasm32-wasip1/unistd.h` puts `fork`, `execve`, `execv`, `vfork`, `getppid`
-  and `getsid` inside `#ifdef __wasilibc_unmodified_upstream`, which is never defined.
-- There is no `spawn.h` and no `sys/wait.h` anywhere in the sysroot.
-- `include/wasm32-wasip1/setjmp.h` `#error`s outright unless
-  `__wasm_exception_handling__` is defined.
+|                                  |                                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| available                        | `signal()`, the `SIG*` numbers, `pid_t`, `size_t`, `struct timespec`                                            |
+| absent                           | `fork`, `vfork`, `execve`, `execv`, `getsid`, `getppid`                                                         |
+| absent                           | `sigaction`, `sigaltstack`, `sigprocmask`, `sigemptyset`, `sigfillset`, `sigaddset`, `sigdelset`, `sigismember` |
+| absent                           | `getrlimit`, `setrlimit`                                                                                        |
+| absent, and this is the surprise | the **types** `sigset_t`, `struct sigaction`, `stack_t`, `struct rlimit`                                        |
+| hard `#error`                    | `<setjmp.h>`, unless built with `-mllvm -wasm-enable-sjlj`                                                      |
+| missing entirely                 | `<spawn.h>`, `<sys/wait.h>`, `<execinfo.h>`                                                                     |
 
-Patches, in order:
+Because the _types_ are missing, the affected code fails to **compile**. Stub definitions
+alone would not have been enough.
 
-| File                                   | Target                                      | Why                                                                                                                                                                   |
-| -------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0001-Program.inc-wasi.patch`          | `llvm/lib/Support/Unix/Program.inc`         | `posix_spawn`, `fork`, `execve`, `getrlimit(RLIMIT_DATA)`. Make `ExecuteAndWait`/`ExecuteNoWait` return an error under `__wasi__`.                                    |
-| `0002-CrashRecoveryContext-wasi.patch` | `llvm/lib/Support/CrashRecoveryContext.cpp` | Uses `sigaction`/`sigprocmask` (declared but **not defined** — they are absent from `libwasi-emulated-signal.a`) and a bare `setjmp`. Reduce to `Fn(); return true;`. |
-| `0003-Signals.inc-wasi.patch`          | `llvm/lib/Support/Unix/Signals.inc`         | `sigaltstack`, `sigaction`, `backtrace`. `LLVM_ENABLE_BACKTRACES=OFF` does not remove all of it.                                                                      |
-| `0004-LockFileManager-getsid.patch`    | `llvm/lib/Support/LockFileManager.cpp`      | The tree's only `getsid` call.                                                                                                                                        |
-| `0005-Process.inc-wasi.patch`          | `llvm/lib/Support/Unix/Process.inc`         | `getrlimit(RLIMIT_CORE)`, `sigprocmask`.                                                                                                                              |
-| `0006-clang-Stack-wasi.patch`          | `clang/lib/Basic/Stack.cpp`                 | With threads off `runOnNewStack` cannot grow the stack, so the "stack nearly exhausted" recovery is gone and only a spurious warning remains.                         |
+## Two mechanisms, deliberately
 
-## Why dropping CrashRecoveryContext is acceptable
+**Most of it needs no patch.** `toolchain/wasi-compat/` supplies the missing types and
+prototypes through a force-included prelude (`-include wasi-compat.h`) and their
+definitions through one object file. That covers `Signals.inc` and `Process.inc`
+completely — several dozen call sites that would otherwise each need editing, and
+re-editing on every LLVM upgrade.
 
-A clang internal error becomes a wasm trap that kills the instance. That is fine here: a
-fresh instance is created per compile anyway, and the UI reports an internal compiler
-error. The alternative — building the whole 60 MB module with `-fwasm-exceptions
--mllvm -wasm-enable-sjlj` — costs size and speed everywhere to service a path that
-should never run.
+**Three files still need real patches**, because no header can fix them:
+
+| Patch                                             | Why a prelude cannot help                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `0001-Program.inc-no-fork-exec-on-wasi.patch`     | The `fork`/`execve` path must be _removed_, not satisfied. Declaring `fork` would just move the failure to runtime. |
+| `0002-CrashRecoveryContext-disable-on-wasi.patch` | `<setjmp.h>` `#error`s on include, and crash recovery is built on `setjmp`.                                         |
+| `0003-LockFileManager-no-getsid-on-wasi.patch`    | The `getsid` call is load-bearing logic, so it needs a different answer rather than a stub.                         |
+
+All three are verified to apply cleanly to `llvmorg-23.1.0`.
+
+## Why disabling crash recovery is acceptable
+
+A clang internal error becomes a wasm trap that kills the instance. That is fine: the
+browser host builds a fresh instance per compile and reports an internal compiler error
+to the user. The alternative — building the whole ~60 MB module with `-fwasm-exceptions
+-mllvm -wasm-enable-sjlj` — would cost size and speed everywhere to service a path that
+should never execute.
 
 ## Status
 
-**Not yet written.** The build scripts and CI workflow are in place and the sysroot
-packer is verified against the real sysroot, but the patch series and the LLVM build
-itself are unrun. See `docs/toolchain.md` for the staged plan and the fallback.
+Patches apply cleanly and the compat layer is verified: it compiles, it exports all ten
+symbols, and a file reproducing the real `Signals.inc`/`Process.inc` call patterns goes
+from 20 compile errors to zero and links with no undefined symbols.
+
+**The full LLVM build has not been run.** That is the next gate — see `docs/toolchain.md`.

@@ -45,17 +45,36 @@ through its `WIN32 / UNIX / Generic` dispatch and calls
 It also sets `CMAKE_AR=llvm-ar`. GNU `ar` cannot write a symbol index for wasm objects,
 and the failure surfaces far away as `undefined symbol: vtable for llvm::cl::OptionValue`.
 
-## Blockers, verified against wasi-sysroot-34.0
+## Blockers, established by compile probes
 
-I checked these against the shipped tarball rather than taking them on trust:
+Reading wasi-libc's headers is misleading: the declarations are physically present but
+sealed inside `#ifdef __wasilibc_unmodified_upstream`, which is never defined. So these
+were determined by compiling probes against wasi-sdk-34, not by grepping.
 
-- `fork`, `execve`, `execv`, `vfork`, `getppid`, `getsid` are all inside
-  `#ifdef __wasilibc_unmodified_upstream` in `unistd.h` — **not declared**.
-- No `spawn.h`, no `sys/wait.h` anywhere in the sysroot.
-- `setjmp.h` `#error`s unless `__wasm_exception_handling__` is defined.
+|               |                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| available     | `signal()`, the `SIG*` numbers, `pid_t`, `size_t`, `struct timespec`                             |
+| absent        | `fork`, `vfork`, `execve`, `execv`, `getsid`, `getppid`                                          |
+| absent        | `sigaction`, `sigaltstack`, `sigprocmask`, `sigemptyset`, `sigfillset`, `sigaddset`, `sigdelset` |
+| absent        | `getrlimit`, `setrlimit`                                                                         |
+| absent        | the **types** `sigset_t`, `struct sigaction`, `stack_t`, `struct rlimit`                         |
+| hard `#error` | `<setjmp.h>`                                                                                     |
+| missing       | `<spawn.h>`, `<sys/wait.h>`, `<execinfo.h>`                                                      |
 
-These are compile errors, so a patch series is mandatory, not optional. See
-`toolchain/patches/README.md`.
+The missing _types_ are the part that matters: they mean the affected code fails to
+compile, so stub definitions alone would not have been enough.
+
+The fix is split in two. `toolchain/wasi-compat/` supplies the missing types and
+prototypes via a force-included prelude and their definitions via one object, which
+covers `Signals.inc` and `Process.inc` entirely — several dozen call sites that would
+otherwise need patching, and re-patching on every LLVM upgrade. Only three files need
+real patches: `Program.inc` (the fork path must be removed, not satisfied),
+`CrashRecoveryContext.cpp` (`<setjmp.h>` `#error`s on include) and `LockFileManager.cpp`
+(the `getsid` call is logic, not a stub). All three apply cleanly to `llvmorg-23.1.0`.
+
+**Verified:** the compat layer compiles, exports all ten symbols, and takes a file
+reproducing the real `Signals.inc`/`Process.inc` call patterns from 20 compile errors to
+zero, linking with no undefined symbols. See `toolchain/patches/README.md`.
 
 **`clang -c` does compile in-process.** `CLANG_SPAWN_CC1` defaults to `OFF`, so the
 driver calls cc1 directly instead of spawning. But the _link_ step is a plain command

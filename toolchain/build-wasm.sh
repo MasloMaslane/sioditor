@@ -15,16 +15,29 @@ host_bin="${HOST_BUILD:-$here/build/host}/bin"
 
 # wasi-libc gates several POSIX facilities behind these macros and supplies emulation
 # libraries for them. Without the -D the headers do not declare the symbols at all.
+# Build the compat stubs first: Signals.inc and Process.inc reference POSIX signal and
+# rlimit APIs that wasi-libc withholds *including their types*, so they fail to compile,
+# not merely to link. A force-included prelude plus one object fixes both without
+# patching several dozen call sites in LLVM. See toolchain/wasi-compat/wasi-compat.h.
+compat_obj="$build/wasi-compat.o"
+mkdir -p "$build"
+"$WASI_SDK/bin/clang" --target=wasm32-wasip1 \
+  -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_MMAN \
+  -D_WASI_EMULATED_GETPID -D_WASI_EMULATED_PROCESS_CLOCKS \
+  -O2 -c "$here/wasi-compat/wasi-compat.c" -o "$compat_obj"
+
 cflags=(
   -D_WASI_EMULATED_SIGNAL
   -D_WASI_EMULATED_MMAN
   -D_WASI_EMULATED_GETPID
   -D_WASI_EMULATED_PROCESS_CLOCKS
+  -include "$here/wasi-compat/wasi-compat.h"
   -fno-exceptions -fno-rtti
   -fno-unwind-tables -fno-asynchronous-unwind-tables
 )
 
 ldflags=(
+  "$compat_obj"
   -lwasi-emulated-signal
   -lwasi-emulated-mman
   -lwasi-emulated-getpid
