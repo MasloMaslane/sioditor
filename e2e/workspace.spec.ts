@@ -59,4 +59,43 @@ test.describe('workspace', () => {
     await expect(page.locator('.problems li')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Uruchom wszystkie' })).toBeVisible();
   });
+
+  test('exports the workspace and reads it back', async ({ page }) => {
+    await page.goto('/');
+    await setSource(page, 'print("exported problem")');
+    await setFirstCase(page, '5', '25');
+    await page.waitForTimeout(1500);
+
+    const download = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Eksport' }).click(),
+    ]).then(([d]) => d);
+    const archive = await download.path();
+    expect(archive).toBeTruthy();
+    expect(download.suggestedFilename()).toMatch(/^sioditor-\d{4}-\d{2}-\d{2}\.zip$/);
+
+    // Importing adds rather than replaces: losing an open problem to an import would be
+    // unforgivable mid-contest.
+    await page.setInputFiles('input[type="file"]', archive!);
+    await expect(page.locator('.problems li')).toHaveCount(2);
+    await expect(page.locator('.cm-content')).toContainText('exported problem');
+    await expect(testCase(page).input).toHaveValue('5');
+    await expect(testCase(page).expected).toHaveValue('25');
+  });
+
+  test('limits are editable and survive a reload', async ({ page }) => {
+    await page.goto('/');
+    const time = page.locator('.limits input').first();
+    const memory = page.locator('.limits input').nth(1);
+    await expect(time).toHaveValue('5000');
+    await expect(memory).toHaveValue('256');
+
+    await time.fill('1500');
+    await memory.fill('64');
+    await page.waitForTimeout(1500);
+
+    await page.reload();
+    await expect(page.locator('.limits input').first()).toHaveValue('1500');
+    await expect(page.locator('.limits input').nth(1)).toHaveValue('64');
+  });
 });

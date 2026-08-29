@@ -45,6 +45,8 @@ export interface WorkspaceState {
   readonly select: (id: string) => void;
   readonly update: (patch: Partial<Problem>) => void;
   readonly create: (language: Language) => void;
+  /** Adds an existing problem, as an import does. */
+  readonly add: (problem: Problem) => void;
   readonly rename: (id: string, name: string) => void;
   readonly remove: (id: string) => void;
 }
@@ -117,6 +119,14 @@ export function useWorkspace(): WorkspaceState {
     });
   }, []);
 
+  const add = useCallback((problem: Problem) => {
+    setProblems((prev) => {
+      void workspace.current.save(problem);
+      setCurrentId(problem.id);
+      return [problem, ...prev];
+    });
+  }, []);
+
   const rename = useCallback((id: string, name: string) => {
     setProblems((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, name, updatedAt: Date.now() } : p));
@@ -149,6 +159,7 @@ export function useWorkspace(): WorkspaceState {
     select: setCurrentId,
     update,
     create,
+    add,
     rename,
     remove,
   };

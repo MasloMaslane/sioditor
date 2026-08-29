@@ -5,6 +5,7 @@ import type { TestCase } from '@sioditor/storage';
 import { Editor } from './Editor.js';
 import { ProblemList } from './ProblemList.js';
 import { TestPanel } from './TestPanel.js';
+import { ProblemSettings } from './ProblemSettings.js';
 import { PackBar } from './PackBar.js';
 import { usePack } from './usePack.js';
 import { StoragePanel } from './StoragePanel.js';
@@ -113,6 +114,7 @@ export function App() {
         />
 
         <aside className="side">
+          {current && <ProblemSettings problem={current} onChange={workspace.update} />}
           <TestPanel
             cases={cases}
             results={runner.results}

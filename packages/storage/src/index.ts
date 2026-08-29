@@ -10,3 +10,4 @@ export type { Problem, Revision } from './workspace.js';
 export { Workspace, MAX_REVISIONS_PER_PROBLEM, testsOf } from './workspace.js';
 export type { TestCase, Comparison, ComparisonVerdict } from './tests.js';
 export { compareOutput, parsePastedTests } from './tests.js';
+export { exportWorkspace, importWorkspace } from './archive.js';

@@ -606,3 +606,46 @@ button.wide {
   padding: 1px 8px;
   font-size: 11px;
 }
+
+.limits {
+  display: flex;
+  gap: 14px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.limits label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.limits input {
+  width: 62px;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+}
+
+.limits .unit {
+  color: var(--muted);
+}
+
+.problems-foot {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.problems-foot button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+}
