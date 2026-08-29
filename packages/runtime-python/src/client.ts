@@ -65,7 +65,12 @@ export class PythonRuntime {
         }
       };
       worker.addEventListener('message', onMessage);
-      worker.addEventListener('error', (event) => reject(new Error(event.message)));
+      worker.addEventListener('error', (event) => {
+        // A worker that cannot load its script reports an empty message in Chromium, so
+        // fall back to the filename and line to leave something diagnosable.
+        const detail = event.message || `${event.filename}:${event.lineno}` || 'unknown';
+        reject(new Error(`python worker failed to start: ${detail}`));
+      });
 
       const request: WorkerRequest = {
         kind: 'init',

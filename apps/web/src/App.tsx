@@ -97,7 +97,12 @@ export function App() {
       }
       setStatus(describe(outcome));
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
+      // Surface it in the console too. A runtime that fails to start would otherwise
+      // leave the output pane blank, which reads as "nothing happened" rather than
+      // "something broke" - and tells whoever is debugging nothing at all.
+      setLines((prev) => [...prev, { stream: 'stderr', text: `[sioditor] ${message}` }]);
+      setStatus(message);
     } finally {
       setRunning(false);
       abort.current = null;

@@ -1,6 +1,34 @@
 import { expect, test } from '@playwright/test';
 
 /**
+ * Attach browser-side diagnostics to every test.
+ *
+ * Without this a failure in CI reports only "expected 10, received empty string", which
+ * says nothing about why - and the offline path is precisely where the interesting
+ * failures live and where they cannot be reproduced locally.
+ */
+test.beforeEach(async ({ page }, testInfo) => {
+  const log: string[] = [];
+  page.on('console', (message) => log.push(`[${message.type()}] ${message.text()}`));
+  page.on('pageerror', (error) => log.push(`[pageerror] ${error.message}`));
+  page.on('requestfailed', (request) =>
+    log.push(`[requestfailed] ${request.url()} ${request.failure()?.errorText ?? ''}`),
+  );
+  testInfo.attach; // keep the reference explicit for readers
+  (testInfo as unknown as { _sioditorLog: string[] })._sioditorLog = log;
+});
+
+test.afterEach(async ({}, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const log = (testInfo as unknown as { _sioditorLog?: string[] })._sioditorLog ?? [];
+  // Printed rather than attached: CI shows stdout inline, and an attachment would have
+  // to be downloaded from the run to be read.
+  console.log(`\n--- browser log for "${testInfo.title}" ---`);
+  for (const line of log.slice(-60)) console.log(line);
+  console.log('--- end browser log ---\n');
+});
+
+/**
  * The offline path is the whole product promise, so it is tested the way a contestant
  * would hit it: install online, lose the network, keep working.
  */

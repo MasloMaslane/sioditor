@@ -20,9 +20,13 @@ const post = (message: WorkerMessage) => self.postMessage(message);
 
 async function init(indexUrl: string, interruptBuffer?: Uint8Array): Promise<void> {
   // Loaded from our own origin: COEP would block jsDelivr, and offline must work anyway.
-  const loader = (await import(/* @vite-ignore */ `${indexUrl}/pyodide.mjs`)) as {
-    loadPyodide(options: { indexURL: string }): Promise<PyodideApi>;
-  };
+  let loader: { loadPyodide(options: { indexURL: string }): Promise<PyodideApi> };
+  try {
+    loader = (await import(/* @vite-ignore */ `${indexUrl}/pyodide.mjs`)) as typeof loader;
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`could not load ${indexUrl}/pyodide.mjs (offline cache miss?): ${detail}`);
+  }
   pyodide = await loader.loadPyodide({ indexURL: `${indexUrl}/` });
 
   if (interruptBuffer) {
