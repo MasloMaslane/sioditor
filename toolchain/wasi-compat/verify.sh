@@ -11,6 +11,8 @@ set -euo pipefail
 
 wasi_sdk="${1:-${WASI_SDK:-/opt/wasi-sdk}}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "$here/../host.sh"
 clang="$wasi_sdk/bin/clang"
 clangxx="$wasi_sdk/bin/clang++"
 work="$(mktemp -d)"
@@ -92,6 +94,6 @@ EOF
   -lwasi-emulated-signal -lwasi-emulated-mman \
   -lwasi-emulated-getpid -lwasi-emulated-process-clocks \
   "$work/main.o" "$work/usage.o" "$work/compat.o" -o "$work/probe.wasm"
-echo "    linked $(stat -c%s "$work/probe.wasm") bytes with no undefined symbols"
+echo "    linked $(file_size "$work/probe.wasm") bytes with no undefined symbols"
 
 echo "wasi-compat verified"

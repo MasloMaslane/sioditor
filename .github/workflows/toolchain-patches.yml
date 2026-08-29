@@ -25,11 +25,7 @@ jobs:
         run: ./toolchain/check-patches.sh /tmp/llvm
 
       - name: Fetch wasi-sdk
-        run: |
-          source toolchain/versions.env
-          curl -sSL -o /tmp/wasi-sdk.tar.gz \
-            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION%%.*}/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux.tar.gz"
-          mkdir -p /opt/wasi-sdk && tar xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+        run: ./toolchain/fetch-wasi-sdk.sh /opt/wasi-sdk
 
       - name: Compat layer compiles, links, and fixes the real call patterns
         run: ./toolchain/wasi-compat/verify.sh /opt/wasi-sdk

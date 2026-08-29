@@ -163,7 +163,43 @@ linked), `__builtin_popcountll`, `__builtin_ctzll`, `__builtin_clzll`.
 **Not working:** `-fsanitize=address,undefined` (Emscripten has them, wasi-sdk does
 not), x86 intrinsics, `#pragma GCC optimize/target` (ignored with a warning).
 
-## Starting the build
+## Building it on your own machine
+
+Faster than CI, and the recommended way to get the first number. The output is
+`wasm32-wasip1` and therefore identical whatever the host: the host architecture only
+decides which wasi-sdk is downloaded and which native TableGen binaries get built and
+then discarded.
+
+```
+./toolchain/build-local.sh
+```
+
+That fetches the right wasi-sdk for the machine, clones and patches LLVM, runs both
+stages, packs the sysroot, and prints the artifact sizes.
+
+**Apple Silicon works and is a good choice.** wasi-sdk ships a native `arm64-macos`
+build, so there is no Rosetta involved. Eight to twelve performance cores should finish
+in roughly an hour against the 3-5 hours a 4-vCPU runner takes, with no 6-hour job cap.
+
+Requirements: about 30 GB free, `cmake`, `ninja`, and a host compiler (Xcode Command Line
+Tools on macOS).
+
+Three macOS-specific things to know:
+
+- **Case-insensitive filesystem.** APFS defaults to it and LLVM has historically had
+  trouble there. `build-local.sh` warns if it detects one. It usually builds anyway; the
+  symptom to watch for is a missing-header error naming a file that plainly exists, and
+  the fix is a case-sensitive volume for the build tree.
+- **CMake and Darwin flags.** CMake normally injects `-isysroot` and
+  `-mmacosx-version-min` into every target. `cmake/wasi-llvm.cmake` sets
+  `CMAKE_SYSTEM_NAME WASI`, which should stop the Darwin platform module applying to the
+  cross build - but that path has never been exercised, so check stage B's first compile
+  line.
+- **Homebrew leakage.** The `LLVM_ENABLE_ZLIB=OFF` and `ZSTD=OFF` settings matter more
+  here than on a bare runner: CMake will happily find Homebrew's copies and try to link
+  them into a wasm binary.
+
+## Starting the build in CI
 
 Either press Run workflow on the `toolchain` workflow, or push a tag:
 

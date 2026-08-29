@@ -42,12 +42,10 @@ jobs:
 
       - run: ./toolchain/fetch-llvm.sh
 
+      # Same script a laptop uses, so the two cannot drift and the platform is detected
+      # rather than hardcoded.
       - name: Fetch wasi-sdk
-        run: |
-          source toolchain/versions.env
-          curl -sSL -o wasi-sdk.tar.gz \
-            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION%%.*}/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux.tar.gz"
-          mkdir -p /opt/wasi-sdk && tar xzf wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+        run: ./toolchain/fetch-wasi-sdk.sh /opt/wasi-sdk
 
       - uses: actions/download-artifact@v4
         with:
