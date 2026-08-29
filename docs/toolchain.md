@@ -163,6 +163,21 @@ linked), `__builtin_popcountll`, `__builtin_ctzll`, `__builtin_clzll`.
 **Not working:** `-fsanitize=address,undefined` (Emscripten has them, wasi-sdk does
 not), x86 intrinsics, `#pragma GCC optimize/target` (ignored with a warning).
 
+## Starting the build
+
+Either press Run workflow on the `toolchain` workflow, or push a tag:
+
+```
+git tag toolchain-build-$(date +%Y%m%d-%H%M) && git push origin --tags
+```
+
+The tag route exists because dispatching a workflow requires an `actions:write` token,
+which the automation working on this repo does not have. Pushing a tag is the same
+deliberate gesture and additionally records which commit was built.
+
+Expect 3-5 hours on a 4-vCPU runner, against a 6-hour job cap. If it starts timing out,
+move to a larger runner rather than trimming the build.
+
 ## Staged plan, with a gate at each step
 
 1. **Plumbing first, no build.** Wire the WASI shim and packed-image VFS in a worker and

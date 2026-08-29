@@ -1,10 +1,17 @@
 name: toolchain
 
-# Manual only. This is a multi-hour build on a 4-vCPU runner, so it must not fire on
-# every push that touches a script or a doc under toolchain/. Once the build is known to
-# pass end to end, a schedule or a narrow path trigger can be reconsidered.
+# Deliberate start only. This is a multi-hour build on a 4-vCPU runner, so it must never
+# fire on an ordinary push that touches a script or a doc under toolchain/.
+#
+# Two ways in: the Run workflow button, or pushing a tag named toolchain-build-*. The tag
+# exists because dispatching a workflow needs an actions:write token, which automation
+# here does not have - pushing a tag is the equivalent deliberate gesture and leaves a
+# record of exactly which commit was built.
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'toolchain-build-*'
 
 jobs:
   host-tools:
