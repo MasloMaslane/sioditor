@@ -70,6 +70,19 @@ export function StoragePanel({ storage, onClose }: { storage: StorageState; onCl
           </button>
         )}
 
+        <label className="auto-download">
+          <input
+            type="checkbox"
+            data-field="auto-download"
+            checked={storage.autoDownload}
+            onChange={(event) => storage.setAutoDownload(event.target.checked)}
+          />
+          <span>
+            Pobieraj wszystko automatycznie. Wylacz, jesli jestes na wolnym lub platnym polaczeniu -
+            komplet to okolo 150 MB.
+          </span>
+        </label>
+
         <dl className="storage-facts">
           <dt>Zajete</dt>
           <dd>

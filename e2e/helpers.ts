@@ -25,6 +25,25 @@ export async function setSource(page: Page, source: string): Promise<void> {
   );
 }
 
+/**
+ * Turns off automatic downloading before the app boots.
+ *
+ * For tests that drive the pack buttons themselves: with auto-download on, a pack is
+ * usually already fetched by the time the test looks for its "Pobierz" button, and the
+ * test then waits for a control that will never appear.
+ *
+ * Must run before navigation - the preference is read once when the hook initialises.
+ */
+export async function withoutAutoDownload(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('sioditor.auto-download', 'off');
+    } catch {
+      // Private windows can refuse; the test will simply exercise the default.
+    }
+  });
+}
+
 /** Downloads a language pack and waits for it to be usable. */
 export async function preparePack(page: Page, language: 'cpp' | 'python'): Promise<void> {
   await page.goto('/');
@@ -33,6 +52,8 @@ export async function preparePack(page: Page, language: 'cpp' | 'python'): Promi
     await page.locator('.langs').getByRole('button', { name: 'C++' }).click();
   }
   const bar = page.locator(`[data-pack="${language}"]`);
+  // The button may be gone already: automatic downloading is on by default, so the pack
+  // is often fetched before a test gets here.
   const download = bar.getByRole('button', { name: 'Pobierz teraz' });
   if (await download.isVisible().catch(() => false)) await download.click();
   await expect(bar).toContainText('gotowy', { timeout: 300_000 });

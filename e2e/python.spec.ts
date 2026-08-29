@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { preparePack, runAll, setFirstCase, setSource, testCase } from './helpers.js';
+import {
+  preparePack,
+  runAll,
+  setFirstCase,
+  setSource,
+  testCase,
+  withoutAutoDownload,
+} from './helpers.js';
 
 /**
  * Attach browser-side diagnostics to every test.
@@ -107,6 +114,7 @@ test.describe('python runtime', () => {
   test('will not offer Run until the runtime is actually available', async ({ page }) => {
     // Previously Run was always enabled and a click with no pack produced silence. It is
     // now gated on the pack, and the bar says what is missing.
+    await withoutAutoDownload(page);
     await page.goto('/');
     await expect(page.locator('[data-pack="python"]')).toContainText('Pobierz teraz');
     await expect(page.getByRole('button', { name: 'Uruchom wszystkie' })).toBeDisabled();

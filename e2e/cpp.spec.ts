@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { prepareCpp, runAll, setSource, testCase, requireCppToolchain } from './helpers.js';
+import {
+  prepareCpp,
+  runAll,
+  setSource,
+  testCase,
+  requireCppToolchain,
+  withoutAutoDownload,
+} from './helpers.js';
 
 /**
  * The C++ path end to end in a real browser: fetch a ninety-megabyte toolchain, compile
@@ -103,6 +110,8 @@ test.describe('c++ toolchain', () => {
   });
 
   test('the precompiled header makes compiling several times faster', async ({ page }) => {
+    // Installed by hand here, so the before and after can be measured.
+    await withoutAutoDownload(page);
     const source = [
       '#include <bits/stdc++.h>',
       'using namespace std;',

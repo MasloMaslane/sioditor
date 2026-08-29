@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { withoutAutoDownload } from './helpers.js';
 
 /**
  * The storage panel. Its job is that a contestant can arm the tool deliberately before a
@@ -8,6 +9,8 @@ test.describe('storage panel', () => {
   test.setTimeout(300_000);
 
   const open = async (page: import('@playwright/test').Page) => {
+    // This suite drives the download buttons itself, so the automatic fetch is off.
+    await withoutAutoDownload(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Pakiety' }).click();
     await expect(page.locator('.modal')).toBeVisible();

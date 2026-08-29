@@ -33,6 +33,19 @@ export function App() {
     void requestPersistence();
   }, []);
 
+  // The storage layer downloads in the background, including automatically on load. The
+  // run buttons hold their own cached answer to "is this pack ready", so they have to be
+  // told when that changes - otherwise a pack finishes and Run stays disabled until the
+  // page is reloaded.
+  const readySignature = storage.packs.map((p) => `${p.pack.id}:${p.ready}`).join(',');
+  useEffect(() => {
+    pythonPack.recheck();
+    cppPack.recheck();
+    numpyPack.recheck();
+    pchPack.recheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readySignature]);
+
   // Results belong to the problem that produced them.
   useEffect(() => {
     runner.clear();
