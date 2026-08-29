@@ -5,3 +5,6 @@ export { CacheAssetStore } from './cache-store.js';
 export { PackManager } from './pack-manager.js';
 export type { StorageEstimate } from './quota.js';
 export { requestPersistence, estimateStorage } from './quota.js';
+export type { Language } from './types.js';
+export type { Problem, Revision } from './workspace.js';
+export { Workspace, MAX_REVISIONS_PER_PROBLEM } from './workspace.js';

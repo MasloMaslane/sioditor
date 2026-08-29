@@ -29,7 +29,8 @@ export async function setSource(page: Page, source: string): Promise<void> {
 /** Downloads the C++ pack and waits for it to be usable. */
 export async function prepareCpp(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'C++' }).click();
+  // Scoped to the language switcher: "+ C++" in the problem list also matches on name.
+  await page.locator('.langs').getByRole('button', { name: 'C++' }).click();
   await page.locator('[data-pack="cpp"]').getByRole('button', { name: 'Pobierz teraz' }).click();
   await expect(page.locator('[data-pack="cpp"]')).toContainText('gotowy', { timeout: 300_000 });
 }

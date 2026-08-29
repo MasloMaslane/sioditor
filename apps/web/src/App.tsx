@@ -5,38 +5,20 @@ import { CppToolchain, explainBuildErrors, RECURSION_LIMIT_NOTE } from '@siodito
 import { execute, type RunResult } from '@sioditor/runner';
 import { PACKS, PackManager, getPack, requestPersistence } from '@sioditor/storage';
 import { Editor } from './Editor.js';
+import { ProblemList } from './ProblemList.js';
+import { STARTERS, useWorkspace } from './useWorkspace.js';
 import { Console, type ConsoleLine } from './Console.js';
 import { PackBar } from './PackBar.js';
 import { usePack } from './usePack.js';
 
-const SAMPLE_PYTHON = `import sys
-
-data = sys.stdin.read().split()
-if data:
-    print(sum(int(x) for x in data))
-else:
-    print("podaj liczby na wejsciu")
-`;
-
-const SAMPLE_CPP = `#include <bits/stdc++.h>
-using namespace std;
-
-int main() {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    long long x, total = 0;
-    while (cin >> x) total += x;
-    cout << total << '\\n';
-}
-`;
-
 const packs = new PackManager();
 
 export function App() {
-  const [language, setLanguage] = useState<Language>('python');
-  const [source, setSource] = useState(SAMPLE_PYTHON);
-  const [stdin, setStdin] = useState('1 2 3 4');
+  const workspace = useWorkspace();
+  const current = workspace.current;
+  const language: Language = current?.language ?? 'python';
+  const source = current?.source ?? '';
+  const stdin = current?.stdin ?? '';
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string>('');
@@ -55,12 +37,17 @@ export function App() {
     void requestPersistence();
   }, []);
 
-  const switchLanguage = useCallback((next: Language) => {
-    setLanguage(next);
-    setSource(next === 'cpp' ? SAMPLE_CPP : SAMPLE_PYTHON);
-    setLines([]);
-    setStatus('');
-  }, []);
+  const switchLanguage = useCallback(
+    (next: Language) => {
+      if (!current || current.language === next) return;
+      // Changing an open problem's language would leave source in the wrong language, so
+      // this rewrites both together via the starter for that language.
+      workspace.update({ language: next, source: STARTERS[next] });
+      setLines([]);
+      setStatus('');
+    },
+    [current, workspace],
+  );
 
   const describe = (outcome: RunOutcome): string => {
     switch (outcome.kind) {
@@ -202,6 +189,10 @@ export function App() {
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
+  if (!workspace.loaded) {
+    return <div className="app loading">Wczytywanie...</div>;
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -235,13 +226,20 @@ export function App() {
       {language === 'python' && <PackBar pack={numpyPack} />}
 
       <main className="workspace">
-        <Editor doc={source} language={language} onChange={setSource} onRun={() => void run()} />
+        <ProblemList workspace={workspace} />
+        <Editor
+          key={current?.id ?? 'none'}
+          doc={source}
+          language={language}
+          onChange={(next) => workspace.update({ source: next })}
+          onRun={() => void run()}
+        />
         <aside className="side">
           <label className="panel">
             <span className="panel-title">Wejscie</span>
             <textarea
               value={stdin}
-              onChange={(event) => setStdin(event.target.value)}
+              onChange={(event) => workspace.update({ stdin: event.target.value })}
               spellCheck={false}
             />
           </label>

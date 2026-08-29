@@ -183,3 +183,126 @@ textarea,
     border-bottom: 1px solid var(--line);
   }
 }
+
+.app.loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.workspace {
+  grid-template-columns: 180px minmax(0, 1.5fr) minmax(260px, 1fr);
+}
+
+.problems {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.problems-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 10px 6px;
+}
+
+.problems-add {
+  display: flex;
+  gap: 4px;
+}
+
+.problems-add button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.problems ul {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 6px 8px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.problems li {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.problems li.active {
+  background: var(--line);
+}
+
+.problems li input {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.problem-open {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  text-align: left;
+}
+
+.problem-lang {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.problem-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problem-remove {
+  flex: none;
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.problems li:hover .problem-remove,
+.problems li.active .problem-remove {
+  opacity: 1;
+}
+
+.problem-remove:hover {
+  color: var(--error);
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .problems {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    max-height: 140px;
+  }
+}
