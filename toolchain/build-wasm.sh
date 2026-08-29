@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# Stage B: cross-compile clang + lld to a single wasm32-wasip1 module.
+# Stage B: cross-compile clang and lld to wasm32-wasip1.
 #
-# One multicall `llvm.wasm` rather than separate clang.wasm and wasm-ld.wasm. They share
-# LLVMSupport, LLVMObject, LLVMBinaryFormat and the WebAssembly backend, so shipping both
-# separately duplicates all of it. One module also means one download, one brotli payload
-# and one entry in Chrome's wasm code cache, which is keyed on resource URL.
+# Two binaries rather than the multicall `llvm` driver. The driver looked attractive -
+# clang and lld share LLVMSupport, LLVMObject and the WebAssembly backend, so one module
+# would avoid duplicating them - but it collects every tool that declares GENERATE_DRIVER,
+# some twenty of them (llvm-ar, objdump, readobj, nm and friends). None of those are on a
+# compile-and-link path, and bundling them inflates exactly the number this build exists
+# to measure. It also cannot coexist with LLVM_BUILD_TOOLS=OFF: the driver still emits
+# tool symlinks for targets that were never created, and generation fails.
+#
+# Two binaries is also the route every previous wasm-clang took. Revisit the driver as a
+# size optimisation later, with real numbers to compare against.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,14 +31,27 @@ mkdir -p "$build"
 "$WASI_SDK/bin/clang" --target=wasm32-wasip1 \
   -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_MMAN \
   -D_WASI_EMULATED_GETPID -D_WASI_EMULATED_PROCESS_CLOCKS \
+  -idirafter "$here/wasi-compat/include" \
   -O2 -c "$here/wasi-compat/wasi-compat.c" -o "$compat_obj"
 
 cflags=(
+  # clang/Support/Compiler.h picks its visibility macros from a chain of platform tests,
+  # and its wasm branch tests __WASM__ - uppercase - which nothing defines; clang predefines
+  # __wasm__. So on wasm no branch matches, CLANG_ABI is left undefined, and every class in
+  # the generated Attrs.inc fails to parse. That is an upstream bug in LLVM 23.
+  #
+  # CLANG_BUILD_STATIC is the intended knob for a fully static build and makes all of those
+  # macros empty, which is correct here: BUILD_SHARED_LIBS and LLVM_BUILD_LLVM_DYLIB are
+  # both off. Fixing it this way rather than by defining __WASM__ ourselves.
+  -DCLANG_BUILD_STATIC
   -D_WASI_EMULATED_SIGNAL
   -D_WASI_EMULATED_MMAN
   -D_WASI_EMULATED_GETPID
   -D_WASI_EMULATED_PROCESS_CLOCKS
   -include "$here/wasi-compat/wasi-compat.h"
+  # -idirafter, not -I: these are stand-ins for headers wasi-libc lacks, and a real one
+  # must always win if a future wasi-sdk grows it.
+  -idirafter "$here/wasi-compat/include"
   -fno-exceptions -fno-rtti
   -fno-unwind-tables -fno-asynchronous-unwind-tables
 )
@@ -109,7 +128,7 @@ cmake -G Ninja -S "$src/llvm" -B "$build" \
   -DCLANG_ENABLE_ARCMT=OFF \
   -DCLANG_ENABLE_OBJC_REWRITER=OFF \
   -DCLANG_PLUGIN_SUPPORT=OFF \
-  -DCLANG_BUILD_TOOLS=OFF \
+  -DCLANG_BUILD_TOOLS=ON \
   -DCLANG_INCLUDE_TESTS=OFF \
   -DCLANG_INCLUDE_DOCS=OFF \
   -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
@@ -117,8 +136,7 @@ cmake -G Ninja -S "$src/llvm" -B "$build" \
   -DCLANG_DEFAULT_LINKER=wasm-ld \
   -DDEFAULT_SYSROOT=/sysroot \
   \
-  -DLLVM_TOOL_LLVM_DRIVER_BUILD=ON \
   -DLLVM_PARALLEL_LINK_JOBS=1
 
-ninja -C "$build" llvm-driver
-ls -l "$build/bin/llvm.wasm"
+ninja -C "$build" clang lld
+ls -l "$build"/bin/*.wasm

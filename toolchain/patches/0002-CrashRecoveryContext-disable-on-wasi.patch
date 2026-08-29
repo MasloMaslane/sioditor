@@ -1,5 +1,5 @@
 diff --git a/llvm/lib/Support/CrashRecoveryContext.cpp b/llvm/lib/Support/CrashRecoveryContext.cpp
-index 493ba95..0ba9412 100644
+index 493ba951f..88a254020 100644
 --- a/llvm/lib/Support/CrashRecoveryContext.cpp
 +++ b/llvm/lib/Support/CrashRecoveryContext.cpp
 @@ -14,7 +14,12 @@
@@ -36,7 +36,7 @@ index 493ba95..0ba9412 100644
  
      // Otherwise let the caller decide of the outcome of the crash. Currently
      // this occurs when using SEH on Windows with MSVC or clang-cl.
-@@ -335,6 +344,26 @@ static void uninstallExceptionOrSignalHandlers() {
+@@ -335,6 +344,31 @@ static void uninstallExceptionOrSignalHandlers() {
    }
  }
  
@@ -45,9 +45,10 @@ index 493ba95..0ba9412 100644
 +// WASI implementation: crash recovery is not available.
 +//
 +// The generic POSIX path below needs sigaction/sigprocmask/sigemptyset and setjmp.
-+// wasi-libc declares the signal functions behind _WASI_EMULATED_SIGNAL but does not
-+// define them - libwasi-emulated-signal.a contains only signal, raise, abort and
-+// psignal - so that path compiles and then fails at link. setjmp is unavailable too.
++// wasi-libc seals all of those inside `#ifdef __wasilibc_unmodified_upstream`, so they
++// are not declared at all - along with the types sigset_t, struct sigaction and stack_t.
++// libwasi-emulated-signal.a provides only signal, raise, abort and psignal. setjmp is a
++// hard #error. So that path does not merely fail to link, it fails to compile.
 +//
 +// Disabling recovery means an internal compiler error becomes a trap that kills the
 +// instance rather than a catchable failure. That is an acceptable trade for the browser
@@ -56,6 +57,10 @@ index 493ba95..0ba9412 100644
 +// -mllvm -wasm-enable-sjlj - would cost size and speed everywhere to service a path that
 +// should never execute.
 +
++// raise() is one of the few signal functions WASI does provide, and throwIfCrash calls it
++// outside of any of these branches - so the header is still needed here.
++#include <signal.h>
++
 +static void
 +installExceptionOrSignalHandlers(bool NeedsPOSIXUtilitySignalHandling) {}
 +static void uninstallExceptionOrSignalHandlers() {}
@@ -63,7 +68,7 @@ index 493ba95..0ba9412 100644
  #else // !_WIN32
  
  // Generic POSIX implementation.
-@@ -431,10 +460,12 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+@@ -431,10 +465,12 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
      CrashRecoveryContextImpl *CRCI = new CrashRecoveryContextImpl(this);
      Impl = CRCI;
  

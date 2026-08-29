@@ -104,10 +104,41 @@ Pruned from the sysroot: the `__cxx03` header tree, the entire `noeh` include tr
 wasip2/wasip3 and threads slices, the `llvm-lto` bitcode libraries, and ~95% of clang's
 resource headers (x86/ARM/GPU intrinsics).
 
-**Still unmeasured, and it decides the project: the size of `llvm.wasm` for LLVM 23.**
-For reference, binji's 2019 LLVM-9 build was 31.2 MB for clang alone plus 19.5 MB for
-lld. Estimate for a merged LLVM-23 module is 55–75 MB raw / 14–19 MB brotli, but that is
-an extrapolation across fourteen releases. Measure it before building anything on top.
+### The gate number, measured
+
+The build now runs. On an M-series Mac, LLVM 23.1.0:
+
+| artifact | raw | brotli-11 |
+|---|---:|---:|
+| `clang.wasm` | 58.6 MB | **11.6 MB** (5.05x) |
+| `lld.wasm` | 33.2 MB | **6.8 MB** (4.84x) |
+| `sysroot.bin` | 22.7 MB | 3.7 MB |
+| **first-visit total** | | **≈ 22 MB** |
+
+That lands in the comfortable band. The pre-build estimate was 55-75 MB raw for a merged
+module; two separate binaries came in at 91.8 MB raw / 18.5 MB compressed, which is the
+same ballpark once the duplication between them is accounted for.
+
+Stage A takes about a minute on ten cores; stage B about twenty. Under wasmtime a cold
+compile of a `<bits/stdc++.h>` translation unit is ~10 s and the link ~0.3 s - the compile
+figure is why the precompiled header matters, not a reason to doubt the approach.
+
+### It works, end to end
+
+Verified by actually running it, not by inspection:
+
+```
+$ wasmtime run ... clang.wasm -cc1 -triple wasm32-wasip1 -O2 -std=c++23 ... -o oi.o oi.cpp
+$ wasmtime run ... lld.wasm -flavor wasm crt1.o oi.o -lc -lc++ -lc++abi -lclang_rt.builtins ...
+$ wasmtime run oi.wasm
+9000000000000     <- __int128 arithmetic
+8 5000            <- __builtin_popcountll, and 5000-deep recursion
+1 3 4             <- std::sort via <bits/stdc++.h>
+4 8               <- sizeof(long)=4, sizeof(long long)=8
+```
+
+That last line is the ILP32 divergence, confirmed on a real binary rather than argued
+from the ABI docs.
 
 ## Sysroot packaging
 

@@ -1,5 +1,5 @@
 diff --git a/llvm/lib/Support/Unix/Program.inc b/llvm/lib/Support/Unix/Program.inc
-index 489ca03..0e7e221 100644
+index 489ca03b3..ed3676fb4 100644
 --- a/llvm/lib/Support/Unix/Program.inc
 +++ b/llvm/lib/Support/Unix/Program.inc
 @@ -137,6 +137,11 @@ static bool RedirectIO_PS(const std::string *Path, int FD, std::string *ErrMsg,
@@ -69,3 +69,13 @@ index 489ca03..0e7e221 100644
  #elif !defined(__Fuchsia__)
  using ::wait4;
  #endif
+@@ -460,7 +492,8 @@ ProcessInfo llvm::sys::Wait(const ProcessInfo &PI,
+     std::chrono::microseconds UserT = toDuration(Info.ru_utime);
+     std::chrono::microseconds KernelT = toDuration(Info.ru_stime);
+     uint64_t PeakMemory = 0;
+-#if !defined(__HAIKU__) && !defined(__MVS__)
++#if !defined(__HAIKU__) && !defined(__MVS__) && !defined(__wasi__)
++    // wasi-libc's struct rusage carries only the time fields.
+     PeakMemory = static_cast<uint64_t>(Info.ru_maxrss);
+ #endif
+     *ProcStat = ProcessStatistics{UserT + KernelT, UserT, PeakMemory};

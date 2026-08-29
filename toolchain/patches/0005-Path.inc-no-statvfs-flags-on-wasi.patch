@@ -1,0 +1,16 @@
+diff --git a/llvm/lib/Support/Unix/Path.inc b/llvm/lib/Support/Unix/Path.inc
+index d01967330..dc75288c6 100644
+--- a/llvm/lib/Support/Unix/Path.inc
++++ b/llvm/lib/Support/Unix/Path.inc
+@@ -569,6 +569,11 @@ static bool is_local_impl(struct STATVFS &Vfs) {
+   // The file system can have an arbitrary structure on z/OS; must go with the
+   // conservative answer.
+   return false;
++#elif defined(__wasi__)
++  // wasi-libc's statvfs has no f_flags and defines no MNT_LOCAL. Every filesystem a
++  // WASI module can see is one the host handed it, so "local" is the honest answer.
++  (void)Vfs;
++  return true;
+ #else
+   return !!(STATVFS_F_FLAG(Vfs) & MNT_LOCAL);
+ #endif

@@ -1,0 +1,23 @@
+diff --git a/llvm/lib/Support/raw_socket_stream.cpp b/llvm/lib/Support/raw_socket_stream.cpp
+index cdf793c89..dc26771c8 100644
+--- a/llvm/lib/Support/raw_socket_stream.cpp
++++ b/llvm/lib/Support/raw_socket_stream.cpp
+@@ -41,6 +41,12 @@
+ 
+ using namespace llvm;
+ 
++// WASI has no sockets. wasi-libc ships <sys/socket.h> and <sys/un.h> as stubs - sockaddr_un
++// has no sun_path member, and socket/bind/listen/connect are not declared - so this file
++// cannot compile. Nothing in clang or lld references raw_socket_stream (it exists for
++// llvm-debuginfod and similar), so compiling it out costs nothing here.
++#if !defined(__wasi__)
++
+ #ifdef _WIN32
+ WSABalancer::WSABalancer() {
+   WSADATA WsaData;
+@@ -370,3 +376,5 @@ ssize_t raw_socket_stream::read(char *Ptr, size_t Size,
+   }
+   return raw_fd_stream::read(Ptr, Size);
+ }
++
++#endif // !__wasi__

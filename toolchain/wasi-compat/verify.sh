@@ -20,7 +20,8 @@ trap 'rm -rf "$work"' EXIT
 
 flags=(--target=wasm32-wasip1
   -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_MMAN
-  -D_WASI_EMULATED_GETPID -D_WASI_EMULATED_PROCESS_CLOCKS)
+  -D_WASI_EMULATED_GETPID -D_WASI_EMULATED_PROCESS_CLOCKS
+  -idirafter "$here/include")
 
 echo "1/3 compiling the stubs"
 "$clang" "${flags[@]}" -O2 -Wall -Wextra -c "$here/wasi-compat.c" -o "$work/compat.o"
@@ -38,7 +39,7 @@ cat > "$work/usage.cpp" <<'EOF'
 #include <sys/resource.h>
 #include <cstddef>
 static void handler(int) {}
-static void sigHandler(int, void *, void *) {}
+static void sigHandler(int, siginfo_t *, void *) {}
 struct RegisteredSignalInfo { int SigNo; struct sigaction SA; };
 static RegisteredSignalInfo Registered[16];
 void altStack() {
